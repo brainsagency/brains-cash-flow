@@ -14,6 +14,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { CashEvent } from "@engine/index.js";
+import type { ApReconciliation } from "./billdotcom/reconcile.js";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase.js";
 
 export interface QboConnection {
@@ -33,8 +34,16 @@ export interface QboSyncResult {
   apTotal: number;
 }
 
+export interface BillSyncResult {
+  syncedAt: string;
+  anchor: string;
+  apEvents: CashEvent[]; // feeds the forecast (AP source of truth)
+  apTotal: number;
+  reconciliation: ApReconciliation | null; // vs QBO Bills
+}
+
 export interface SyncLogEntry {
-  source: "qbo";
+  source: "qbo" | "billdotcom";
   startedAt: string;
   finishedAt: string;
   status: "ok" | "error";
@@ -61,6 +70,12 @@ export function getLastSync(): Promise<QboSyncResult | null> {
 }
 export function appendLog(e: SyncLogEntry): Promise<void> {
   return isSupabaseConfigured() ? sbAppendLog(e) : fileAppendLog(e);
+}
+export function saveBillSync(r: BillSyncResult): Promise<void> {
+  return isSupabaseConfigured() ? sbSaveBillSync(r) : fileSaveBillSync(r);
+}
+export function getLastBillSync(): Promise<BillSyncResult | null> {
+  return isSupabaseConfigured() ? sbGetLastBillSync() : fileGetLastBillSync();
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +156,35 @@ async function sbAppendLog(e: SyncLogEntry): Promise<void> {
   if (error) throw new Error(`Supabase appendLog: ${error.message}`);
 }
 
+async function sbSaveBillSync(r: BillSyncResult): Promise<void> {
+  const { error } = await supabaseAdmin().from("bill_last_sync").upsert({
+    id: "default",
+    synced_at: r.syncedAt,
+    anchor: r.anchor,
+    ap_events: r.apEvents,
+    ap_total: r.apTotal,
+    reconciliation: r.reconciliation,
+  });
+  if (error) throw new Error(`Supabase saveBillSync: ${error.message}`);
+}
+
+async function sbGetLastBillSync(): Promise<BillSyncResult | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("bill_last_sync")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) throw new Error(`Supabase getLastBillSync: ${error.message}`);
+  if (!data) return null;
+  return {
+    syncedAt: data.synced_at as string,
+    anchor: data.anchor as string,
+    apEvents: (data.ap_events ?? []) as CashEvent[],
+    apTotal: Number(data.ap_total),
+    reconciliation: (data.reconciliation ?? null) as ApReconciliation | null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // File backend (dev fallback)
 // ---------------------------------------------------------------------------
@@ -148,6 +192,7 @@ async function sbAppendLog(e: SyncLogEntry): Promise<void> {
 interface FileShape {
   connection?: QboConnection;
   lastSync?: QboSyncResult;
+  billLastSync?: BillSyncResult;
   log: SyncLogEntry[];
 }
 
@@ -180,4 +225,10 @@ async function fileGetLastSync(): Promise<QboSyncResult | null> {
 async function fileAppendLog(entry: SyncLogEntry): Promise<void> {
   const s = await fileRead();
   await fileWrite({ ...s, log: [entry, ...s.log].slice(0, 50) });
+}
+async function fileSaveBillSync(billLastSync: BillSyncResult): Promise<void> {
+  await fileWrite({ ...(await fileRead()), billLastSync });
+}
+async function fileGetLastBillSync(): Promise<BillSyncResult | null> {
+  return (await fileRead()).billLastSync ?? null;
 }

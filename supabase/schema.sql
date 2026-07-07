@@ -25,6 +25,17 @@ create table if not exists public.qbo_last_sync (
   ap_total numeric not null default 0
 );
 
+-- Last successful Bill.com sync (single row). AP source of truth for the
+-- forecast; `reconciliation` holds the check vs QuickBooks Bills.
+create table if not exists public.bill_last_sync (
+  id text primary key default 'default',
+  synced_at timestamptz not null,
+  anchor date not null,
+  ap_events jsonb not null default '[]',
+  ap_total numeric not null default 0,
+  reconciliation jsonb
+);
+
 -- Sync run log (append-only-ish; UI shows freshness/errors).
 create table if not exists public.sync_log (
   id bigint generated always as identity primary key,
@@ -40,4 +51,5 @@ create table if not exists public.sync_log (
 
 alter table public.qbo_connection enable row level security;
 alter table public.qbo_last_sync enable row level security;
+alter table public.bill_last_sync enable row level security;
 alter table public.sync_log enable row level security;

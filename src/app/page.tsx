@@ -15,6 +15,7 @@ import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
+import { BillPanel } from "@/components/BillPanel.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 
@@ -32,8 +33,15 @@ const MONTH_RANGES: RangeOption[] = [
   { value: 36, label: "36m" },
 ];
 
+function liveBadgeText(qbo: string | null, bill: string | null): string {
+  if (qbo && bill) return "QuickBooks AR + Bill.com AP live · other sources sample";
+  if (qbo) return "QuickBooks AR live · other sources sample";
+  if (bill) return "Bill.com AP live · other sources sample";
+  return "Sample data · live syncs pending";
+}
+
 export default function Dashboard() {
-  const { input, scenarios, prefs, setPrefs, qboSyncedAt } = useStore();
+  const { input, scenarios, prefs, setPrefs, qboSyncedAt, billSyncedAt } = useStore();
   const [nav, setNav] = useState<ViewKey>("cashflow");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { view, weekRange, monthRange } = prefs;
@@ -107,8 +115,8 @@ export default function Dashboard() {
             <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
           </div>
           <span className="badge">
-            <span className="dot" style={qboSyncedAt ? { background: "var(--green)" } : undefined} />
-            {qboSyncedAt ? "QuickBooks AR live · other sources sample" : "Sample data · live syncs pending"}
+            <span className="dot" style={qboSyncedAt || billSyncedAt ? { background: "var(--green)" } : undefined} />
+            {liveBadgeText(qboSyncedAt, billSyncedAt)}
           </span>
         </header>
 
@@ -135,6 +143,7 @@ export default function Dashboard() {
         )}
         {nav === "bills" && (
           <div className="grid" style={{ gap: 16 }}>
+            <BillPanel />
             <ReceivablesPayables show="ap" />
             <OtherWithdrawals />
           </div>

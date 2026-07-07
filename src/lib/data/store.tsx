@@ -36,17 +36,20 @@ interface AppState {
 }
 
 interface Store {
-  input: ForecastInput; // MERGED (manual + synced AR)
+  input: ForecastInput; // MERGED (manual + synced AR/AP)
   scenarios: Scenario[];
   prefs: UiPrefs;
   ready: boolean;
   /** When QuickBooks AR is overlaid, the sync timestamp; else null. */
   qboSyncedAt: string | null;
+  /** When Bill.com AP is overlaid, the sync timestamp; else null. */
+  billSyncedAt: string | null;
   setInput: (updater: (prev: ForecastInput) => ForecastInput) => void;
   setScenarios: (updater: (prev: Scenario[]) => Scenario[]) => void;
   setPrefs: (patch: Partial<UiPrefs>) => void;
   reset: () => void;
   refreshQbo: () => Promise<void>;
+  refreshBill: () => Promise<void>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -57,12 +60,16 @@ function initialState(): AppState {
 
 // AR invoice categories that QuickBooks owns when connected.
 const QBO_AR_CATEGORIES = new Set(["currentAR", "overdueAR"]);
+// AP categories that Bill.com owns when synced (apEstimate stays manual).
+const BILL_AP_CATEGORIES = new Set(["accountsPayable"]);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState);
   const [ready, setReady] = useState(false);
   const [syncedAr, setSyncedAr] = useState<CashEvent[] | null>(null);
   const [qboSyncedAt, setQboSyncedAt] = useState<string | null>(null);
+  const [syncedAp, setSyncedAp] = useState<CashEvent[] | null>(null);
+  const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -99,9 +106,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshBill = useCallback(async () => {
+    try {
+      const res = await fetch("/api/billdotcom/data", { cache: "no-store" });
+      const data = (await res.json()) as { syncedAt: string | null; apEvents: CashEvent[] };
+      if (data.apEvents && data.apEvents.length > 0) {
+        setSyncedAp(data.apEvents);
+        setBillSyncedAt(data.syncedAt);
+      } else {
+        setSyncedAp(null);
+        setBillSyncedAt(null);
+      }
+    } catch {
+      /* endpoint unavailable — stay on manual data */
+    }
+  }, []);
+
   useEffect(() => {
     void refreshQbo();
-  }, [refreshQbo]);
+    void refreshBill();
+  }, [refreshQbo, refreshBill]);
 
   useEffect(() => {
     if (!ready) return;
@@ -127,12 +151,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const reset = useCallback(() => setState(initialState()), []);
 
-  // Merge: when QuickBooks AR is present, it replaces manual current/overdue AR.
+  // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced
+  // Bill.com AP replaces manual accountsPayable (apEstimate stays manual).
   const mergedInput = useMemo<ForecastInput>(() => {
-    if (!syncedAr || syncedAr.length === 0) return state.input;
-    const manualNonAr = (state.input.events ?? []).filter((e) => !QBO_AR_CATEGORIES.has(e.category));
-    return { ...state.input, events: [...manualNonAr, ...syncedAr] };
-  }, [state.input, syncedAr]);
+    const hasAr = syncedAr && syncedAr.length > 0;
+    const hasAp = syncedAp && syncedAp.length > 0;
+    if (!hasAr && !hasAp) return state.input;
+    let events = state.input.events ?? [];
+    if (hasAr) events = events.filter((e) => !QBO_AR_CATEGORIES.has(e.category));
+    if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
+    return {
+      ...state.input,
+      events: [...events, ...(hasAr ? syncedAr : []), ...(hasAp ? syncedAp : [])],
+    };
+  }, [state.input, syncedAr, syncedAp]);
 
   return (
     <StoreContext.Provider
@@ -142,11 +174,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         prefs: state.prefs,
         ready,
         qboSyncedAt,
+        billSyncedAt,
         setInput,
         setScenarios,
         setPrefs,
         reset,
         refreshQbo,
+        refreshBill,
       }}
     >
       {children}
