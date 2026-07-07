@@ -209,7 +209,8 @@ export default function Dashboard() {
         {nav === "assumptions" && <AssumptionsPanel />}
 
         <footer className="muted" style={{ marginTop: 32 }}>
-          Read-only against financial systems · figures are projections, reconcile against the sheet before acting
+          Read-only against financial systems · figures are projections, reconcile against the sheet before acting ·{" "}
+          <a href="mailto:gustavo@brains.co?subject=Brains%20Cash%20Flow%20support">Contact support</a>
         </footer>
       </main>
     </div>

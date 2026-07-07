@@ -139,11 +139,13 @@ async function tokenRequest(cfg: QboConfig, body: URLSearchParams): Promise<QboT
   });
   if (!res.ok) {
     const body = await res.text();
+    const tid = res.headers.get("intuit_tid");
+    const suffix = tid ? ` [intuit_tid: ${tid}]` : "";
     // 400 (invalid_grant) / 401 → refresh token expired or revoked: reconnect.
     if (res.status === 400 || res.status === 401) {
-      throw new QboAuthError(`QBO auth failed (${res.status}): ${body}`);
+      throw new QboAuthError(`QBO auth failed (${res.status})${suffix}: ${body}`);
     }
-    throw new Error(`QBO token request failed (${res.status}): ${body}`);
+    throw new Error(`QBO token request failed (${res.status})${suffix}: ${body}`);
   }
   return (await res.json()) as QboTokens;
 }
@@ -194,8 +196,10 @@ export async function queryQbo(
   });
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 401) throw new QboAuthError(`QBO query unauthorized (401): ${body}`);
-    throw new Error(`QBO query failed (${res.status}): ${body}`);
+    const tid = res.headers.get("intuit_tid");
+    const suffix = tid ? ` [intuit_tid: ${tid}]` : "";
+    if (res.status === 401) throw new QboAuthError(`QBO query unauthorized (401)${suffix}: ${body}`);
+    throw new Error(`QBO query failed (${res.status})${suffix}: ${body}`);
   }
   const json = (await res.json()) as QboQueryResponse;
   return json.QueryResponse ?? {};
