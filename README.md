@@ -168,6 +168,21 @@ UX:
 State lives in `src/lib/data/store.tsx` — the seam where a Supabase-backed data
 layer and the live syncs drop in.
 
+## Deploying (Vercel)
+
+- **Env vars** (Settings → Environment Variables): `APP_PASSWORD` (the gate —
+  without it the site is open), `CRON_SECRET` (any long random string; Vercel
+  sends it with scheduled requests), the 3 `SUPABASE`/`NEXT_PUBLIC_SUPABASE`
+  vars, the 4 `QBO_*` vars (with `QBO_REDIRECT_URI` pointing at the deployed
+  domain and that URI registered in the Intuit app), and the 5 `BILLDOTCOM_*`
+  vars.
+- **Scheduled syncs**: `vercel.json` defines nightly crons for
+  `/api/sync/qbo` and `/api/sync/billdotcom` (~10:00 UTC). The UI Refresh
+  buttons hit the same logic on demand.
+- **Staleness**: every synced value carries its sync time; if a connected feed
+  is older than ~26h the dashboard shows a loud stale-data banner (no silent
+  stale data).
+
 ## Roadmap
 
 See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and the

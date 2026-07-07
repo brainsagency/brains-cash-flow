@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireCronAuth } from "@/lib/cron.js";
 import { qboConfig, queryQbo, refreshTokens } from "@/lib/integrations/qbo/client.js";
 import { mapBills, mapInvoices, type QboBill, type QboInvoice } from "@/lib/integrations/qbo/map.js";
 import { appendLog, getConnection, saveConnection, saveSync } from "@/lib/integrations/store.js";
@@ -8,8 +9,20 @@ export const dynamic = "force-dynamic";
 
 const REFRESH_SKEW_MS = 60_000; // refresh a minute before expiry
 
+/** UI-triggered sync (page is already behind the password gate). */
+export function POST(_req: NextRequest) {
+  return runQboSync();
+}
+
+/** Cron-triggered sync (Vercel Cron issues GETs with the cron bearer). */
+export function GET(req: NextRequest) {
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
+  return runQboSync();
+}
+
 /** Pull AR (Invoices, for the forecast) + AP (Bills, for validation) from QBO. */
-export async function POST(_req: NextRequest) {
+async function runQboSync() {
   const startedAt = new Date().toISOString();
   const conn = await getConnection();
   if (!conn) {

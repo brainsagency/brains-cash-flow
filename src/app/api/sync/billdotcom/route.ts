@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireCronAuth } from "@/lib/cron.js";
 import { billConfig, listBills, listVendorNames, login } from "@/lib/integrations/billdotcom/client.js";
 import { mapBills } from "@/lib/integrations/billdotcom/map.js";
 import { reconcileAp } from "@/lib/integrations/billdotcom/reconcile.js";
@@ -7,11 +8,23 @@ import { appendLog, getLastSync, saveBillSync } from "@/lib/integrations/store.j
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** UI-triggered sync (page is already behind the password gate). */
+export function POST(_req: NextRequest) {
+  return runBillSync();
+}
+
+/** Cron-triggered sync (Vercel Cron issues GETs with the cron bearer). */
+export function GET(req: NextRequest) {
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
+  return runBillSync();
+}
+
 /**
  * Pull AP from Bill.com (the AP source of truth) and reconcile it against the
  * QBO Bills validation set from the last QuickBooks sync.
  */
-export async function POST(_req: NextRequest) {
+async function runBillSync() {
   const startedAt = new Date().toISOString();
   let cfg;
   try {

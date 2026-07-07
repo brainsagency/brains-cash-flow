@@ -10,6 +10,12 @@ export async function middleware(req: NextRequest) {
   const expected = await expectedToken();
   if (!expected) return NextResponse.next(); // gate off when no password set
 
+  // Vercel Cron authenticates with `Authorization: Bearer ${CRON_SECRET}`.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers.get("authorization") === `Bearer ${cronSecret}`) {
+    return NextResponse.next();
+  }
+
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (token === expected) return NextResponse.next();
 

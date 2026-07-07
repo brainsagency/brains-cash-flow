@@ -40,6 +40,20 @@ function liveBadgeText(qbo: string | null, bill: string | null): string {
   return "Sample data · live syncs pending";
 }
 
+/** A connected feed counts as stale past this (nightly cron + buffer). */
+const STALE_AFTER_HOURS = 26;
+
+function staleFeeds(qbo: string | null, bill: string | null): Array<{ name: string; hours: number }> {
+  const now = Date.now();
+  return [
+    { name: "QuickBooks AR", at: qbo },
+    { name: "Bill.com AP", at: bill },
+  ]
+    .filter((f): f is { name: string; at: string } => f.at !== null)
+    .map((f) => ({ name: f.name, hours: Math.floor((now - new Date(f.at).getTime()) / 3_600_000) }))
+    .filter((f) => f.hours >= STALE_AFTER_HOURS);
+}
+
 export default function Dashboard() {
   const { input, scenarios, prefs, setPrefs, qboSyncedAt, billSyncedAt } = useStore();
   const [nav, setNav] = useState<ViewKey>("cashflow");
@@ -104,6 +118,7 @@ export default function Dashboard() {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const pageTitle = NAV.find((n) => n.key === nav)?.title ?? "Cash Flow";
+  const stale = staleFeeds(qboSyncedAt, billSyncedAt);
 
   return (
     <div className="layout">
@@ -115,10 +130,30 @@ export default function Dashboard() {
             <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
           </div>
           <span className="badge">
-            <span className="dot" style={qboSyncedAt || billSyncedAt ? { background: "var(--green)" } : undefined} />
+            <span
+              className="dot"
+              style={
+                stale.length > 0
+                  ? { background: "var(--red)" }
+                  : qboSyncedAt || billSyncedAt
+                    ? { background: "var(--green)" }
+                    : undefined
+              }
+            />
             {liveBadgeText(qboSyncedAt, billSyncedAt)}
           </span>
         </header>
+
+        {stale.length > 0 && (
+          <div className="alert critical" style={{ marginBottom: 16 }}>
+            <span className="ico">⚠️</span>
+            <span>
+              <b>Stale data:</b>{" "}
+              {stale.map((f) => `${f.name} last synced ${f.hours}h ago`).join("; ")}. The forecast may be out of
+              date — refresh from the source panel, or check the nightly sync.
+            </span>
+          </div>
+        )}
 
         {nav === "cashflow" && (
           <div className="grid" style={{ gap: 16 }}>
