@@ -88,7 +88,7 @@ async function getPaged<T>(cfg: BillConfig, sessionId: string, path: string): Pr
     url.searchParams.set("max", "100");
     if (page) url.searchParams.set("page", page);
     const res = await fetch(url.toString(), {
-      headers: { sessionId, Accept: "application/json" },
+      headers: { sessionId, devKey: cfg.devKey, Accept: "application/json" },
     });
     if (!res.ok) throw new Error(`Bill.com GET ${path} failed (${res.status}): ${await res.text()}`);
     const json = (await res.json()) as ListResponse<T>;
