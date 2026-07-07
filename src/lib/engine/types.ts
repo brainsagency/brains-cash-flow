@@ -86,6 +86,11 @@ export interface CashEvent {
   probability?: number;
   /** committed (real cash) vs budgeted (model plan). Defaults to committed. */
   basis?: CashBasis;
+  /**
+   * The source system's date (e.g. a bill's due date) before any sweep or
+   * user override. Display metadata only — the engine ignores it.
+   */
+  originalDate?: ISODate;
   /** Free-form label for narrative / drill-down. */
   memo?: string;
 }

@@ -29,10 +29,22 @@ export interface UiPrefs {
 
 const DEFAULT_PREFS: UiPrefs = { view: "week", weekRange: 26, monthRange: 18 };
 
+/**
+ * Per-bill annotation on synced AP, keyed by the event id (`bill-…`), so it
+ * survives every re-sync. `excluded` drops the bill from the forecast (e.g.
+ * production/passthrough bills for the sister company); `payDate` overrides
+ * when the cash actually leaves (planned pay date vs the bill's due date).
+ */
+export interface ApAdjustment {
+  excluded?: boolean;
+  payDate?: string;
+}
+
 interface AppState {
   input: ForecastInput; // the MANUAL layer
   scenarios: Scenario[];
   prefs: UiPrefs;
+  apAdjustments: Record<string, ApAdjustment>;
 }
 
 interface Store {
@@ -44,6 +56,11 @@ interface Store {
   qboSyncedAt: string | null;
   /** When Bill.com AP is overlaid, the sync timestamp; else null. */
   billSyncedAt: string | null;
+  /** Raw synced AP events (before exclusions/overrides) for the AP ledger. */
+  syncedApRaw: CashEvent[] | null;
+  apAdjustments: Record<string, ApAdjustment>;
+  /** Patch a bill's adjustment; `payDate: null` clears the override. */
+  setApAdjustment: (id: string, patch: { excluded?: boolean; payDate?: string | null }) => void;
   setInput: (updater: (prev: ForecastInput) => ForecastInput) => void;
   setScenarios: (updater: (prev: Scenario[]) => Scenario[]) => void;
   setPrefs: (patch: Partial<UiPrefs>) => void;
@@ -55,7 +72,7 @@ interface Store {
 const StoreContext = createContext<Store | null>(null);
 
 function initialState(): AppState {
-  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS };
+  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS, apAdjustments: {} };
 }
 
 // AR invoice categories that QuickBooks owns when connected.
@@ -81,6 +98,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             input: parsed.input,
             scenarios: parsed.scenarios ?? [],
             prefs: { ...DEFAULT_PREFS, ...(parsed.prefs ?? {}) },
+            apAdjustments: parsed.apAdjustments ?? {},
           });
         }
       }
@@ -149,10 +167,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (patch: Partial<UiPrefs>) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...patch } })),
     [],
   );
+  const setApAdjustment = useCallback(
+    (id: string, patch: { excluded?: boolean; payDate?: string | null }) =>
+      setState((s) => {
+        const cur: ApAdjustment = { ...(s.apAdjustments[id] ?? {}) };
+        if (patch.excluded !== undefined) cur.excluded = patch.excluded;
+        if (patch.payDate !== undefined) {
+          if (patch.payDate === null) delete cur.payDate;
+          else cur.payDate = patch.payDate;
+        }
+        return { ...s, apAdjustments: { ...s.apAdjustments, [id]: cur } };
+      }),
+    [],
+  );
   const reset = useCallback(() => setState(initialState()), []);
 
   // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced
   // Bill.com AP replaces manual accountsPayable (apEstimate stays manual).
+  // Per-bill adjustments apply here: excluded bills drop out of the forecast,
+  // planned-pay-date overrides move the cash-out date (clamped to the anchor).
   const mergedInput = useMemo<ForecastInput>(() => {
     const hasAr = syncedAr && syncedAr.length > 0;
     const hasAp = syncedAp && syncedAp.length > 0;
@@ -160,11 +193,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let events = state.input.events ?? [];
     if (hasAr) events = events.filter((e) => !QBO_AR_CATEGORIES.has(e.category));
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
+
+    const anchor = state.input.anchorDate;
+    const adjustedAp = (hasAp ? syncedAp : []).flatMap((e) => {
+      const adj = state.apAdjustments[e.id ?? ""] ?? {};
+      if (adj.excluded) return [];
+      if (adj.payDate) return [{ ...e, date: adj.payDate < anchor ? anchor : adj.payDate }];
+      return [e];
+    });
+
     return {
       ...state.input,
-      events: [...events, ...(hasAr ? syncedAr : []), ...(hasAp ? syncedAp : [])],
+      events: [...events, ...(hasAr ? syncedAr : []), ...adjustedAp],
     };
-  }, [state.input, syncedAr, syncedAp]);
+  }, [state.input, state.apAdjustments, syncedAr, syncedAp]);
 
   return (
     <StoreContext.Provider
@@ -175,6 +217,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ready,
         qboSyncedAt,
         billSyncedAt,
+        syncedApRaw: syncedAp,
+        apAdjustments: state.apAdjustments,
+        setApAdjustment,
         setInput,
         setScenarios,
         setPrefs,

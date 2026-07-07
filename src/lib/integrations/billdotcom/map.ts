@@ -60,6 +60,7 @@ export function mapBill(
     amount,
     date: due < anchor ? anchor : due,
     basis: "committed",
+    ...(bill.dueDate ? { originalDate: bill.dueDate } : {}),
     memo: label(vendorName, bill.invoiceNumber ?? bill.invoice?.invoiceNumber),
   };
 }

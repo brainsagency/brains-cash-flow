@@ -721,6 +721,23 @@ details.editor[open] > summary::before {
   border-color: var(--accent);
 }
 
+/* Compact date input inside table cells (AP planned pay date) */
+input.cell-date {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+input.cell-date:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+input.cell-date:disabled {
+  opacity: 0.5;
+}
+
 .muted {
   color: var(--text-faint);
   font-size: 12px;

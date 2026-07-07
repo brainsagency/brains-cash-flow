@@ -13,6 +13,7 @@ import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
+import { ApLedger } from "@/components/ApLedger.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
@@ -179,7 +180,7 @@ export default function Dashboard() {
         {nav === "bills" && (
           <div className="grid" style={{ gap: 16 }}>
             <BillPanel />
-            <ReceivablesPayables show="ap" />
+            <ApLedger />
             <OtherWithdrawals />
           </div>
         )}

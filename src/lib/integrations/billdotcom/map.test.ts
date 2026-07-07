@@ -24,6 +24,7 @@ describe("Bill.com mapBill", () => {
       amount: 225,
       date: "2026-08-01",
       basis: "committed",
+      originalDate: "2026-08-01",
       memo: "Norton Lumber #INV-9",
     });
   });
@@ -41,9 +42,10 @@ describe("Bill.com mapBill", () => {
     expect(mapBill({ id: "2", amount: 100, dueAmount: 0, dueDate: "2026-08-01", paymentStatus: "UNPAID" }, ANCHOR)).toBeNull();
   });
 
-  it("sweeps past-due bills to the anchor", () => {
+  it("sweeps past-due bills to the anchor, keeping the original due date", () => {
     const e = mapBill({ id: "3", dueAmount: 500, dueDate: "2026-05-01", paymentStatus: "UNPAID" }, ANCHOR);
     expect(e?.date).toBe(ANCHOR);
+    expect(e?.originalDate).toBe("2026-05-01");
   });
 
   it("falls back to amount when dueAmount is absent, and to vendorNames map", () => {
