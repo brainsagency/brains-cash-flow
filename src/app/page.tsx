@@ -7,7 +7,7 @@ import { OVERLAY_COLORS } from "@/lib/categories.js";
 import { fmtAxisLabel } from "@/lib/format.js";
 import { KpiCards } from "@/components/KpiCards.js";
 import { type Overlay } from "@/components/CashChart.js";
-import { CashFlowCard } from "@/components/CashFlowCard.js";
+import { CashFlowCard, type RangeOption } from "@/components/CashFlowCard.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
@@ -15,12 +15,32 @@ import { CashMatrix } from "@/components/CashMatrix.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 
-const WEEKLY_HORIZON: HorizonConfig = { weeklyPeriods: 52, monthlyPeriods: 0 };
-const MONTHLY_HORIZON: HorizonConfig = { weeklyPeriods: 0, monthlyPeriods: 18 };
+const WEEK_RANGES: RangeOption[] = [
+  { value: 13, label: "13w" },
+  { value: 26, label: "26w" },
+  { value: 39, label: "39w" },
+  { value: 52, label: "52w" },
+];
+const MONTH_RANGES: RangeOption[] = [
+  { value: 6, label: "6m" },
+  { value: 12, label: "12m" },
+  { value: 18, label: "18m" },
+  { value: 24, label: "24m" },
+  { value: 36, label: "36m" },
+];
 
 export default function Dashboard() {
-  const { input, scenarios } = useStore();
+  const { input, scenarios, prefs, setPrefs } = useStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { view, weekRange, monthRange } = prefs;
+  const setView = (v: "week" | "month") => setPrefs({ view: v });
+  const setWeekRange = (n: number) => setPrefs({ weekRange: n });
+  const setMonthRange = (n: number) => setPrefs({ monthRange: n });
+
+  const activeHorizon: HorizonConfig =
+    view === "week"
+      ? { weeklyPeriods: weekRange, monthlyPeriods: 0 }
+      : { weeklyPeriods: 0, monthlyPeriods: monthRange };
 
   const colorFor = (id: string) => {
     const idx = scenarios.findIndex((s) => s.id === id);
@@ -29,8 +49,8 @@ export default function Dashboard() {
 
   // Base (input's own horizon) drives KPIs / alerts / narrative / matrix.
   const base = useMemo(() => forecast(input), [input]);
-  const weekly = useMemo(() => forecast({ ...input, horizon: WEEKLY_HORIZON }), [input]);
-  const monthly = useMemo(() => forecast({ ...input, horizon: MONTHLY_HORIZON }), [input]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const active = useMemo(() => forecast({ ...input, horizon: activeHorizon }), [input, view, weekRange, monthRange]);
 
   const buildOverlays = (baseInput: ForecastInput, view: "week" | "month"): Overlay[] =>
     selectedIds
@@ -50,15 +70,10 @@ export default function Dashboard() {
       })
       .filter((o): o is Overlay => o !== null);
 
-  const weeklyOverlays = useMemo(
-    () => buildOverlays({ ...input, horizon: WEEKLY_HORIZON }, "week"),
+  const activeOverlays = useMemo(
+    () => buildOverlays({ ...input, horizon: activeHorizon }, view),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [input, scenarios, selectedIds],
-  );
-  const monthlyOverlays = useMemo(
-    () => buildOverlays({ ...input, horizon: MONTHLY_HORIZON }, "month"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [input, scenarios, selectedIds],
+    [input, scenarios, selectedIds, view, weekRange, monthRange],
   );
 
   // Scenario compare table uses the input's own horizon.
@@ -90,10 +105,15 @@ export default function Dashboard() {
         </span>
       </header>
 
-      <div className="grid" style={{ gap: 16 }}>
-        <CashFlowCard title="Weekly Cash Flow" view="week" result={weekly} overlays={weeklyOverlays} />
-        <CashFlowCard title="Monthly Cash Flow" view="month" result={monthly} overlays={monthlyOverlays} />
-      </div>
+      <CashFlowCard
+        view={view}
+        onView={setView}
+        result={active}
+        overlays={activeOverlays}
+        rangeOptions={view === "week" ? WEEK_RANGES : MONTH_RANGES}
+        rangeValue={view === "week" ? weekRange : monthRange}
+        onRange={view === "week" ? setWeekRange : setMonthRange}
+      />
 
       <div className="section-title">
         <h2>Key metrics</h2>

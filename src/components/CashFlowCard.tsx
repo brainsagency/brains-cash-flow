@@ -5,14 +5,22 @@ import { daysBetween, type ForecastResult } from "@engine/index.js";
 import { CashChart, type ChartPoint, type Overlay } from "@/components/CashChart.js";
 import { fmtAxisLabel, fmtDuration, fmtMoney, fmtShortDate } from "@/lib/format.js";
 
-interface Props {
-  title: string;
-  view: "week" | "month";
-  result: ForecastResult;
-  overlays: Overlay[];
+export interface RangeOption {
+  value: number;
+  label: string;
 }
 
-export function CashFlowCard({ title, view, result, overlays }: Props) {
+interface Props {
+  view: "week" | "month";
+  onView: (view: "week" | "month") => void;
+  result: ForecastResult;
+  overlays: Overlay[];
+  rangeOptions: RangeOption[];
+  rangeValue: number;
+  onRange: (value: number) => void;
+}
+
+export function CashFlowCard({ view, onView, result, overlays, rangeOptions, rangeValue, onRange }: Props) {
   const threshold = result.settings.lowCashThreshold ?? 250_000;
 
   const series: ChartPoint[] = useMemo(
@@ -42,10 +50,34 @@ export function CashFlowCard({ title, view, result, overlays }: Props) {
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 14 }}>
-        <h2 style={{ margin: 0, textTransform: "none", fontSize: 16, color: "var(--text)" }}>{title}</h2>
+        <h2 style={{ margin: 0, textTransform: "none", fontSize: 16, color: "var(--text)" }}>Cash Flow</h2>
+        <div className="row" style={{ gap: 3, marginLeft: 12 }}>
+          <button className={`btn sm ${view === "week" ? "primary" : "ghost"}`} onClick={() => onView("week")}>
+            Weekly
+          </button>
+          <button className={`btn sm ${view === "month" ? "primary" : "ghost"}`} onClick={() => onView("month")}>
+            Monthly
+          </button>
+        </div>
         <div className="spacer" />
-        <Legend overlays={overlays} />
+        <div className="row" style={{ gap: 3 }}>
+          {rangeOptions.map((o) => (
+            <button
+              key={o.value}
+              className={`btn sm ${o.value === rangeValue ? "primary" : "ghost"}`}
+              onClick={() => onRange(o.value)}
+              title={`Show ${o.label}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
       </div>
+      {overlays.length > 0 && (
+        <div className="row" style={{ marginBottom: 8, justifyContent: "flex-end" }}>
+          <Legend overlays={overlays} />
+        </div>
+      )}
 
       <div className="grid hero">
         <div className="callout">

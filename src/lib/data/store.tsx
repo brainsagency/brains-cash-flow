@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Client-side store for v1: holds the base forecast input and saved scenarios,
- * persisted to localStorage. This is the seam where a Supabase-backed data
- * layer drops in later — the components only ever touch `useStore`.
+ * Client-side store for v1: holds the base forecast input, saved scenarios, and
+ * lightweight UI prefs, persisted to localStorage. This is the seam where a
+ * Supabase-backed data layer drops in later — components only touch `useStore`.
  */
 
 import {
@@ -20,22 +20,33 @@ import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 // Bump when the seed shape changes so evaluators load the fresh sample.
 const STORAGE_KEY = "brains-cashflow-v2";
 
+/** Remembered view/range choices for the cash-flow chart. */
+export interface UiPrefs {
+  view: "week" | "month";
+  weekRange: number;
+  monthRange: number;
+}
+
+const DEFAULT_PREFS: UiPrefs = { view: "week", weekRange: 26, monthRange: 18 };
+
 interface AppState {
   input: ForecastInput;
   scenarios: Scenario[];
+  prefs: UiPrefs;
 }
 
 interface Store extends AppState {
   ready: boolean;
   setInput: (updater: (prev: ForecastInput) => ForecastInput) => void;
   setScenarios: (updater: (prev: Scenario[]) => Scenario[]) => void;
+  setPrefs: (patch: Partial<UiPrefs>) => void;
   reset: () => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
 function initialState(): AppState {
-  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS };
+  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -49,7 +60,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<AppState>;
         if (parsed.input) {
-          setState({ input: parsed.input, scenarios: parsed.scenarios ?? [] });
+          setState({
+            input: parsed.input,
+            scenarios: parsed.scenarios ?? [],
+            prefs: { ...DEFAULT_PREFS, ...(parsed.prefs ?? {}) },
+          });
         }
       }
     } catch {
@@ -78,10 +93,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, scenarios: updater(s.scenarios) })),
     [],
   );
+  const setPrefs = useCallback(
+    (patch: Partial<UiPrefs>) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...patch } })),
+    [],
+  );
   const reset = useCallback(() => setState(initialState()), []);
 
   return (
-    <StoreContext.Provider value={{ ...state, ready, setInput, setScenarios, reset }}>
+    <StoreContext.Provider value={{ ...state, ready, setInput, setScenarios, setPrefs, reset }}>
       {children}
     </StoreContext.Provider>
   );
