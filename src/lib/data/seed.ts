@@ -33,6 +33,10 @@ export const SEED_INPUT: ForecastInput = {
     { id: "ar3", category: "currentAR", amount: 140_000, date: "2026-08-21", memo: "Project milestone (sample)" },
     { id: "od1", category: "overdueAR", amount: 62_000, date: "2026-07-13", memo: "Overdue — Acme (sample)" },
     { id: "ni1", category: "notInvoiced", amount: 70_000, date: "2026-08-10", memo: "Won, not yet invoiced (sample)" },
+    { id: "ap1", category: "accountsPayable", amount: 45_000, date: "2026-07-20", memo: "Media buy — vendor (sample)" },
+    { id: "ap2", category: "accountsPayable", amount: 28_000, date: "2026-08-05", memo: "Contract dev — vendor (sample)" },
+    { id: "ap3", category: "accountsPayable", amount: 16_500, date: "2026-08-22", memo: "SaaS & tools (sample)" },
+    { id: "ape1", category: "apEstimate", amount: 35_000, date: "2026-09-10", memo: "AP estimate — not yet billed (sample)" },
     { id: "tax", category: "otherWithdrawals", amount: 90_000, date: "2026-09-15", memo: "Quarterly tax set-aside (sample)" },
     { id: "dist", category: "otherWithdrawals", amount: 75_000, date: "2026-10-01", memo: "Owner distribution (sample)" },
   ],
@@ -54,6 +58,7 @@ export const SEED_INPUT: ForecastInput = {
     runwayAlertMonths: 6,
     largeOverdueARThreshold: 50_000,
     monthlyBurnOverride: 440_000,
+    lowCashThreshold: 250_000,
   },
 };
 

@@ -35,3 +35,25 @@ export function fmtMonths(n: number | null): string {
 export function fmtDate(iso: string): string {
   return iso;
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-11-24" -> "24 Nov '26". */
+export function fmtShortDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
+  return `${d} ${MONTHS[m - 1]} '${String(y).slice(2)}`;
+}
+
+/** Axis label for a period start date, by granularity. */
+export function fmtAxisLabel(iso: string, view: "week" | "month"): string {
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
+  return view === "week" ? `${m}/${d}` : `${MONTHS[m - 1]} '${String(y).slice(2)}`;
+}
+
+/** Days -> "60 days" / "8 months" depending on scale. */
+export function fmtDuration(days: number, prefer: "days" | "months"): string {
+  if (days <= 0) return "now";
+  if (prefer === "days" && days < 90) return `${days} days`;
+  const months = days / (365.25 / 12);
+  return months < 1.5 ? `${Math.round(days / 7)} weeks` : `${Math.round(months)} months`;
+}

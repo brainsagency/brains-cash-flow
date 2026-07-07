@@ -188,12 +188,19 @@ export interface ForecastSettings {
    * `monthlyBurnComputed` for comparison.
    */
   monthlyBurnOverride?: number;
+  /**
+   * A minimum cash "floor" the business doesn't want to drop below (distinct
+   * from the larger 3× reserve target). Drives the chart's danger line and the
+   * "drops below $X" runway stat. Defaults to 250,000.
+   */
+  lowCashThreshold?: number;
 }
 
 export const DEFAULT_SETTINGS: ForecastSettings = {
   reserveMultiple: 3,
   runwayAlertMonths: 6,
   largeOverdueARThreshold: 50_000,
+  lowCashThreshold: 250_000,
 };
 
 /** Everything the engine needs to produce a forecast. Fully self-contained. */

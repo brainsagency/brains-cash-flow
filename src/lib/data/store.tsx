@@ -17,7 +17,8 @@ import {
 import type { ForecastInput, Scenario } from "@engine/index.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
-const STORAGE_KEY = "brains-cashflow-v1";
+// Bump when the seed shape changes so evaluators load the fresh sample.
+const STORAGE_KEY = "brains-cashflow-v2";
 
 interface AppState {
   input: ForecastInput;
