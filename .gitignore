@@ -14,6 +14,9 @@ out/
 .env.*
 !.env.example
 
+# local dev integration store (tokens/synced data) — never commit
+.data/
+
 # test / coverage
 coverage/
 

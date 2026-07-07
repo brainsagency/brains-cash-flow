@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Client-side store for v1: holds the base forecast input, saved scenarios, and
- * lightweight UI prefs, persisted to localStorage. This is the seam where a
- * Supabase-backed data layer drops in later — components only touch `useStore`.
+ * Client-side store for v1: holds the manual forecast input, saved scenarios,
+ * and UI prefs (persisted to localStorage), and overlays live synced AR from
+ * QuickBooks on top. Components read the merged `input`; `setInput` edits the
+ * manual layer. This is the seam where a Supabase data layer drops in later.
  */
 
 import {
@@ -11,16 +12,15 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
-import type { ForecastInput, Scenario } from "@engine/index.js";
+import type { CashEvent, ForecastInput, Scenario } from "@engine/index.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
-// Bump when the seed shape changes so evaluators load the fresh sample.
 const STORAGE_KEY = "brains-cashflow-v2";
 
-/** Remembered view/range choices for the cash-flow chart. */
 export interface UiPrefs {
   view: "week" | "month";
   weekRange: number;
@@ -30,17 +30,23 @@ export interface UiPrefs {
 const DEFAULT_PREFS: UiPrefs = { view: "week", weekRange: 26, monthRange: 18 };
 
 interface AppState {
-  input: ForecastInput;
+  input: ForecastInput; // the MANUAL layer
   scenarios: Scenario[];
   prefs: UiPrefs;
 }
 
-interface Store extends AppState {
+interface Store {
+  input: ForecastInput; // MERGED (manual + synced AR)
+  scenarios: Scenario[];
+  prefs: UiPrefs;
   ready: boolean;
+  /** When QuickBooks AR is overlaid, the sync timestamp; else null. */
+  qboSyncedAt: string | null;
   setInput: (updater: (prev: ForecastInput) => ForecastInput) => void;
   setScenarios: (updater: (prev: Scenario[]) => Scenario[]) => void;
   setPrefs: (patch: Partial<UiPrefs>) => void;
   reset: () => void;
+  refreshQbo: () => Promise<void>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -49,11 +55,15 @@ function initialState(): AppState {
   return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS };
 }
 
+// AR invoice categories that QuickBooks owns when connected.
+const QBO_AR_CATEGORIES = new Set(["currentAR", "overdueAR"]);
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState);
   const [ready, setReady] = useState(false);
+  const [syncedAr, setSyncedAr] = useState<CashEvent[] | null>(null);
+  const [qboSyncedAt, setQboSyncedAt] = useState<string | null>(null);
 
-  // Load persisted state after mount (avoids SSR/localStorage mismatch).
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -68,18 +78,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch {
-      // ignore corrupt storage — fall back to seed
+      /* corrupt storage — fall back to seed */
     }
     setReady(true);
   }, []);
 
-  // Persist on change once we've loaded.
+  const refreshQbo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/qbo/data", { cache: "no-store" });
+      const data = (await res.json()) as { syncedAt: string | null; arEvents: CashEvent[] };
+      if (data.arEvents && data.arEvents.length > 0) {
+        setSyncedAr(data.arEvents);
+        setQboSyncedAt(data.syncedAt);
+      } else {
+        setSyncedAr(null);
+        setQboSyncedAt(null);
+      }
+    } catch {
+      /* endpoint unavailable (e.g. not deployed) — stay on manual data */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshQbo();
+  }, [refreshQbo]);
+
   useEffect(() => {
     if (!ready) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      // storage full / unavailable — non-fatal
+      /* storage unavailable — non-fatal */
     }
   }, [state, ready]);
 
@@ -89,8 +118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
   const setScenarios = useCallback(
-    (updater: (prev: Scenario[]) => Scenario[]) =>
-      setState((s) => ({ ...s, scenarios: updater(s.scenarios) })),
+    (updater: (prev: Scenario[]) => Scenario[]) => setState((s) => ({ ...s, scenarios: updater(s.scenarios) })),
     [],
   );
   const setPrefs = useCallback(
@@ -99,8 +127,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const reset = useCallback(() => setState(initialState()), []);
 
+  // Merge: when QuickBooks AR is present, it replaces manual current/overdue AR.
+  const mergedInput = useMemo<ForecastInput>(() => {
+    if (!syncedAr || syncedAr.length === 0) return state.input;
+    const manualNonAr = (state.input.events ?? []).filter((e) => !QBO_AR_CATEGORIES.has(e.category));
+    return { ...state.input, events: [...manualNonAr, ...syncedAr] };
+  }, [state.input, syncedAr]);
+
   return (
-    <StoreContext.Provider value={{ ...state, ready, setInput, setScenarios, setPrefs, reset }}>
+    <StoreContext.Provider
+      value={{
+        input: mergedInput,
+        scenarios: state.scenarios,
+        prefs: state.prefs,
+        ready,
+        qboSyncedAt,
+        setInput,
+        setScenarios,
+        setPrefs,
+        reset,
+        refreshQbo,
+      }}
+    >
       {children}
     </StoreContext.Provider>
   );

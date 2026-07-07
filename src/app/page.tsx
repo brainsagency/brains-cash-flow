@@ -14,6 +14,7 @@ import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
+import { QboPanel } from "@/components/QboPanel.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 
@@ -32,7 +33,7 @@ const MONTH_RANGES: RangeOption[] = [
 ];
 
 export default function Dashboard() {
-  const { input, scenarios, prefs, setPrefs } = useStore();
+  const { input, scenarios, prefs, setPrefs, qboSyncedAt } = useStore();
   const [nav, setNav] = useState<ViewKey>("cashflow");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { view, weekRange, monthRange } = prefs;
@@ -106,7 +107,8 @@ export default function Dashboard() {
             <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
           </div>
           <span className="badge">
-            <span className="dot" /> Sample data · live syncs pending
+            <span className="dot" style={qboSyncedAt ? { background: "var(--green)" } : undefined} />
+            {qboSyncedAt ? "QuickBooks AR live · other sources sample" : "Sample data · live syncs pending"}
           </span>
         </header>
 
@@ -125,7 +127,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {nav === "invoices" && <ReceivablesPayables show="ar" />}
+        {nav === "invoices" && (
+          <div className="grid" style={{ gap: 16 }}>
+            <QboPanel />
+            <ReceivablesPayables show="ar" />
+          </div>
+        )}
         {nav === "bills" && (
           <div className="grid" style={{ gap: 16 }}>
             <ReceivablesPayables show="ap" />
