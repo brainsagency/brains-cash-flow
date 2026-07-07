@@ -672,6 +672,35 @@ details.editor[open] > summary::before {
   color: var(--text);
 }
 
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  width: 100%;
+  max-width: 360px;
+}
+.login-card input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.login-card input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .muted {
   color: var(--text-faint);
   font-size: 12px;

@@ -44,7 +44,9 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
       </nav>
       <div className="sidebar-footer">
         <span className="avatar">GD</span>
-        Gustavo Delgado
+        <span>Gustavo Delgado</span>
+        <div className="spacer" />
+        <a className="btn sm ghost" href="/api/auth/logout" title="Lock / sign out">🔒</a>
       </div>
     </aside>
   );
