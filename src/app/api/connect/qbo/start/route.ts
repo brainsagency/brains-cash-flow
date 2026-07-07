@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Kick off the OAuth consent flow: redirect the user to Intuit. */
-export function GET(_req: NextRequest) {
+export async function GET(_req: NextRequest) {
   let cfg;
   try {
     cfg = qboConfig();
@@ -13,7 +13,7 @@ export function GET(_req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
   const state = crypto.randomUUID();
-  const res = NextResponse.redirect(buildAuthorizeUrl(cfg, state));
+  const res = NextResponse.redirect(await buildAuthorizeUrl(cfg, state));
   // CSRF guard: verify this on callback.
   res.cookies.set("qbo_oauth_state", state, {
     httpOnly: true,

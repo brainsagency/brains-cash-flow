@@ -9,9 +9,51 @@
  * Docs: https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0
  */
 
-const AUTHORIZE_URL = "https://appcenter.intuit.com/connect/oauth2";
-const TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const SCOPE = "com.intuit.quickbooks.accounting";
+
+// Intuit's OAuth 2.0 / OIDC discovery documents — the source of truth for the
+// authorize/token endpoints. We fetch these at runtime (cached) so the URLs
+// stay correct if Intuit ever moves them; the published values below are the
+// fallback if discovery is unreachable.
+const DISCOVERY_URLS: Record<QboEnvironment, string> = {
+  sandbox: "https://developer.api.intuit.com/.well-known/openid_sandbox_configuration",
+  production: "https://developer.api.intuit.com/.well-known/openid_configuration",
+};
+
+interface Endpoints {
+  authorization_endpoint: string;
+  token_endpoint: string;
+}
+
+const FALLBACK_ENDPOINTS: Endpoints = {
+  authorization_endpoint: "https://appcenter.intuit.com/connect/oauth2",
+  token_endpoint: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+};
+
+const discoveryCache: Partial<Record<QboEnvironment, Endpoints>> = {};
+
+/** Resolve the authorize/token endpoints from Intuit's discovery doc (cached). */
+export async function getEndpoints(environment: QboEnvironment): Promise<Endpoints> {
+  const cached = discoveryCache[environment];
+  if (cached) return cached;
+  try {
+    const res = await fetch(DISCOVERY_URLS[environment], { headers: { Accept: "application/json" } });
+    if (res.ok) {
+      const doc = (await res.json()) as Partial<Endpoints>;
+      if (doc.authorization_endpoint && doc.token_endpoint) {
+        const endpoints: Endpoints = {
+          authorization_endpoint: doc.authorization_endpoint,
+          token_endpoint: doc.token_endpoint,
+        };
+        discoveryCache[environment] = endpoints;
+        return endpoints;
+      }
+    }
+  } catch {
+    /* fall through to published fallback */
+  }
+  return FALLBACK_ENDPOINTS;
+}
 
 export type QboEnvironment = "sandbox" | "production";
 
@@ -67,8 +109,9 @@ export function apiBase(environment: QboEnvironment): string {
     : "https://sandbox-quickbooks.api.intuit.com";
 }
 
-/** Step 1: URL to send the user to for consent. */
-export function buildAuthorizeUrl(cfg: QboConfig, state: string): string {
+/** Step 1: URL to send the user to for consent (authorize endpoint from discovery). */
+export async function buildAuthorizeUrl(cfg: QboConfig, state: string): Promise<string> {
+  const { authorization_endpoint } = await getEndpoints(cfg.environment);
   const params = new URLSearchParams({
     client_id: cfg.clientId,
     response_type: "code",
@@ -76,7 +119,7 @@ export function buildAuthorizeUrl(cfg: QboConfig, state: string): string {
     redirect_uri: cfg.redirectUri,
     state,
   });
-  return `${AUTHORIZE_URL}?${params.toString()}`;
+  return `${authorization_endpoint}?${params.toString()}`;
 }
 
 function basicAuth(cfg: QboConfig): string {
@@ -84,7 +127,8 @@ function basicAuth(cfg: QboConfig): string {
 }
 
 async function tokenRequest(cfg: QboConfig, body: URLSearchParams): Promise<QboTokens> {
-  const res = await fetch(TOKEN_URL, {
+  const { token_endpoint } = await getEndpoints(cfg.environment);
+  const res = await fetch(token_endpoint, {
     method: "POST",
     headers: {
       Authorization: basicAuth(cfg),
