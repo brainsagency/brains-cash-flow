@@ -12,8 +12,8 @@ export type ViewKey =
 
 export const NAV: Array<{ key: ViewKey; label: string; title: string; icon: ReactNode }> = [
   { key: "cashflow", label: "Cash Flow", title: "Cash Flow", icon: <IconChart /> },
-  { key: "invoices", label: "Invoices Due", title: "Invoices Due (AR)", icon: <IconInvoice /> },
-  { key: "bills", label: "Bills to Pay", title: "Bills to Pay (AP)", icon: <IconBill /> },
+  { key: "invoices", label: "Invoices Due (AR)", title: "Invoices Due (AR)", icon: <IconInvoice /> },
+  { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", icon: <IconBill /> },
   { key: "scenarios", label: "Scenarios", title: "Scenario planning", icon: <IconLayers /> },
   { key: "insights", label: "Insights", title: "Insights", icon: <IconPie /> },
   { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", icon: <IconGear /> },

@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { CashCategory, CashEvent } from "@engine/index.js";
+import type { CashCategory, CashEvent, RecurringItem } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
 
 const AR_CATEGORIES: CashCategory[] = ["overdueAR", "currentAR", "notInvoiced"];
 const AP_CATEGORIES: CashCategory[] = ["accountsPayable", "apEstimate"];
+const OTHER_CATEGORIES: CashCategory[] = ["otherWithdrawals"];
 
 const STATUS: Record<string, { label: string; chip: string }> = {
   overdueAR: { label: "Overdue", chip: "danger" },
@@ -14,14 +15,58 @@ const STATUS: Record<string, { label: string; chip: string }> = {
   notInvoiced: { label: "Not invoiced", chip: "neutral" },
   accountsPayable: { label: "Scheduled", chip: "info" },
   apEstimate: { label: "Estimate", chip: "neutral" },
+  otherWithdrawals: { label: "Withdrawal", chip: "neutral" },
 };
+
+const FREQUENCY_LABEL: Record<RecurringItem["frequency"], string> = {
+  weekly: "Weekly",
+  biweekly: "Biweekly",
+  semimonthly: "Semi-monthly",
+  monthly: "Monthly",
+};
+
+interface LedgerRow {
+  key: string;
+  name: string;
+  statusLabel: string;
+  statusChip: string;
+  when: string;
+  amount: number;
+}
+
+function eventRow(e: CashEvent, i: number): LedgerRow {
+  const st = STATUS[e.category];
+  return {
+    key: e.id ?? `e${i}`,
+    name: e.memo ?? "—",
+    statusLabel: st?.label ?? e.category,
+    statusChip: st?.chip ?? "neutral",
+    when: fmtShortDate(e.date),
+    amount: e.amount,
+  };
+}
 
 export function ReceivablesPayables({ show = "both" }: { show?: "ar" | "ap" | "both" }) {
   const { input } = useStore();
   const events = useMemo(() => input.events ?? [], [input]);
+  const recurring = useMemo(() => input.recurring ?? [], [input]);
 
-  const ar = events.filter((e) => AR_CATEGORIES.includes(e.category)).sort(byDate);
-  const ap = events.filter((e) => AP_CATEGORIES.includes(e.category)).sort(byDate);
+  const arRows = events.filter((e) => AR_CATEGORIES.includes(e.category)).sort(byDate).map(eventRow);
+  const apRows = events.filter((e) => AP_CATEGORIES.includes(e.category)).sort(byDate).map(eventRow);
+
+  // Other withdrawals combine recurring commitments (e.g. Brandy) + one-offs.
+  const otherRecurring: LedgerRow[] = recurring
+    .filter((r) => OTHER_CATEGORIES.includes(r.category))
+    .map((r, i) => ({
+      key: r.id ?? `r${i}`,
+      name: r.memo ?? "—",
+      statusLabel: FREQUENCY_LABEL[r.frequency],
+      statusChip: "info",
+      when: "Recurring",
+      amount: r.amount,
+    }));
+  const otherOneOff = events.filter((e) => OTHER_CATEGORIES.includes(e.category)).sort(byDate).map(eventRow);
+  const otherRows = [...otherRecurring, ...otherOneOff];
 
   const sumOf = (cat: CashCategory) =>
     events.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0);
@@ -29,8 +74,7 @@ export function ReceivablesPayables({ show = "both" }: { show?: "ar" | "ap" | "b
   const arCard = (
     <LedgerCard
       title="Accounts Receivable"
-      items={ar}
-      total={ar.reduce((s, e) => s + e.amount, 0)}
+      rows={arRows}
       entity="Client / project"
       dateLabel="Expected"
       aging={[
@@ -44,8 +88,7 @@ export function ReceivablesPayables({ show = "both" }: { show?: "ar" | "ap" | "b
   const apCard = (
     <LedgerCard
       title="Accounts Payable"
-      items={ap}
-      total={ap.reduce((s, e) => s + e.amount, 0)}
+      rows={apRows}
       entity="Vendor / bill"
       dateLabel="Pay date"
       aging={[
@@ -55,52 +98,74 @@ export function ReceivablesPayables({ show = "both" }: { show?: "ar" | "ap" | "b
       emptyHint="No payables — add in Assumptions, or sync from Bill.com."
     />
   );
+  const otherCard = (
+    <LedgerCard
+      title="Other Withdrawals"
+      note="Cash outflows that aren't operating expense on the books — owner distributions, tax set-asides, and recurring payments (e.g. Brandy). Recurring amounts are per occurrence."
+      rows={otherRows}
+      entity="Description"
+      dateLabel="When"
+      emptyHint="No other withdrawals — add owner distributions, tax set-asides, etc. in Assumptions."
+    />
+  );
 
   if (show === "ar") return arCard;
-  if (show === "ap") return apCard;
+  if (show === "ap")
+    return (
+      <div className="grid" style={{ gap: 16 }}>
+        {apCard}
+        {otherCard}
+      </div>
+    );
   return (
     <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}>
       {arCard}
       {apCard}
+      {otherCard}
     </div>
   );
 }
 
 function LedgerCard({
   title,
-  items,
-  total,
+  note,
+  rows,
   entity,
   dateLabel,
   aging,
   emptyHint,
 }: {
   title: string;
-  items: CashEvent[];
-  total: number;
+  note?: string;
+  rows: LedgerRow[];
   entity: string;
   dateLabel: string;
-  aging: Array<{ label: string; value: number; danger?: boolean }>;
+  aging?: Array<{ label: string; value: number; danger?: boolean }>;
   emptyHint: string;
 }) {
+  const total = rows.reduce((s, r) => s + r.amount, 0);
   return (
     <div className="card">
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="row" style={{ marginBottom: note ? 6 : 12 }}>
         <h2 style={{ margin: 0, textTransform: "none", fontSize: 15, color: "var(--text)" }}>{title}</h2>
         <div className="spacer" />
         <span className="pill-total mono">{fmtMoney(total)}</span>
       </div>
 
-      <div className="aging">
-        {aging.map((a) => (
-          <div key={a.label} className={`a ${a.danger && a.value !== 0 ? "danger" : ""}`}>
-            {a.label}
-            <b className="mono">{fmtMoney(a.value)}</b>
-          </div>
-        ))}
-      </div>
+      {note && <div className="muted" style={{ marginBottom: 12 }}>{note}</div>}
 
-      {items.length === 0 ? (
+      {aging && aging.length > 0 && (
+        <div className="aging">
+          {aging.map((a) => (
+            <div key={a.label} className={`a ${a.danger && a.value !== 0 ? "danger" : ""}`}>
+              {a.label}
+              <b className="mono">{fmtMoney(a.value)}</b>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
         <div className="muted">{emptyHint}</div>
       ) : (
         <div className="table-scroll">
@@ -114,19 +179,16 @@ function LedgerCard({
               </tr>
             </thead>
             <tbody>
-              {items.map((e, i) => {
-                const st = STATUS[e.category];
-                return (
-                  <tr key={e.id ?? i}>
-                    <td>{e.memo ?? "—"}</td>
-                    <td style={{ textAlign: "left" }}>
-                      <span className={`chip ${st?.chip ?? "neutral"}`}>{st?.label ?? e.category}</span>
-                    </td>
-                    <td className="mono" style={{ textAlign: "left" }}>{fmtShortDate(e.date)}</td>
-                    <td className="mono">{fmtMoney(e.amount)}</td>
-                  </tr>
-                );
-              })}
+              {rows.map((r) => (
+                <tr key={r.key}>
+                  <td>{r.name}</td>
+                  <td style={{ textAlign: "left" }}>
+                    <span className={`chip ${r.statusChip}`}>{r.statusLabel}</span>
+                  </td>
+                  <td className="mono" style={{ textAlign: "left" }}>{r.when}</td>
+                  <td className="mono">{fmtMoney(r.amount)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
