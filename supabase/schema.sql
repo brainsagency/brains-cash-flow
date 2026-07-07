@@ -36,6 +36,17 @@ create table if not exists public.bill_last_sync (
   reconciliation jsonb
 );
 
+-- Shared app workspace (single document): the manual forecast layer,
+-- scenarios, and per-bill AP adjustments — so the whole team sees the same
+-- assumptions instead of per-browser localStorage. Last write wins.
+create table if not exists public.app_state (
+  id text primary key default 'default',
+  input jsonb not null,
+  scenarios jsonb not null default '[]',
+  ap_adjustments jsonb not null default '{}',
+  updated_at timestamptz not null default now()
+);
+
 -- Sync run log (append-only-ish; UI shows freshness/errors).
 create table if not exists public.sync_log (
   id bigint generated always as identity primary key,
@@ -52,4 +63,5 @@ create table if not exists public.sync_log (
 alter table public.qbo_connection enable row level security;
 alter table public.qbo_last_sync enable row level security;
 alter table public.bill_last_sync enable row level security;
+alter table public.app_state enable row level security;
 alter table public.sync_log enable row level security;

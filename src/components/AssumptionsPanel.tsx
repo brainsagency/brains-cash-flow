@@ -5,14 +5,28 @@ import { useStore } from "@/lib/data/store.js";
 import { ALL_CATEGORIES, CATEGORY_LABELS } from "@/lib/categories.js";
 
 export function AssumptionsPanel() {
-  const { input, setInput, reset } = useStore();
+  const { input, setInput, reset, storageMode } = useStore();
 
   const patch = (p: Partial<ForecastInput>) => setInput((prev) => ({ ...prev, ...p }));
 
   return (
     <details className="editor">
-      <summary>Assumptions & settings</summary>
+      <summary>
+        Assumptions &amp; settings
+        <span className={`chip ${storageMode === "cloud" ? "committed" : "budgeted"}`} style={{ marginLeft: 8 }}>
+          {storageMode === "cloud" ? "shared workspace" : "this browser only"}
+        </span>
+      </summary>
       <div className="editor-body">
+        {storageMode === "local" && (
+          <div className="alert warning" style={{ marginBottom: 14 }}>
+            <span className="ico">🟡</span>
+            <span>
+              Changes save to <b>this browser only</b>. Run the <code>app_state</code> table SQL in Supabase to
+              enable the shared cloud workspace.
+            </span>
+          </div>
+        )}
         {/* toggles */}
         <div className="row" style={{ gap: 20, marginBottom: 18 }}>
           <label className="toggle">

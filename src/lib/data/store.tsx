@@ -1,10 +1,17 @@
 "use client";
 
 /**
- * Client-side store for v1: holds the manual forecast input, saved scenarios,
- * and UI prefs (persisted to localStorage), and overlays live synced AR from
- * QuickBooks on top. Components read the merged `input`; `setInput` edits the
- * manual layer. This is the seam where a Supabase data layer drops in later.
+ * Client-side store: the manual forecast layer, saved scenarios, and per-bill
+ * AP adjustments, plus per-browser UI prefs — with live synced AR/AP overlaid.
+ *
+ * Storage:
+ *  - Cloud (Supabase via /api/app-state) when available — one shared workspace
+ *    document so the whole team sees the same assumptions. Saves are debounced;
+ *    last write wins.
+ *  - localStorage fallback when the cloud route is unavailable (Supabase not
+ *    configured / table missing). On the first cloud load, any existing
+ *    localStorage data is migrated up automatically.
+ *  - UI prefs stay in localStorage on purpose (view/range are personal).
  */
 
 import {
@@ -13,6 +20,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -20,6 +28,7 @@ import type { CashEvent, ForecastInput, Scenario } from "@engine/index.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
+const SAVE_DEBOUNCE_MS = 800;
 
 export interface UiPrefs {
   view: "week" | "month";
@@ -47,11 +56,15 @@ interface AppState {
   apAdjustments: Record<string, ApAdjustment>;
 }
 
+export type StorageMode = "cloud" | "local";
+
 interface Store {
   input: ForecastInput; // MERGED (manual + synced AR/AP)
   scenarios: Scenario[];
   prefs: UiPrefs;
   ready: boolean;
+  /** Where manual data persists: shared cloud workspace or this browser only. */
+  storageMode: StorageMode;
   /** When QuickBooks AR is overlaid, the sync timestamp; else null. */
   qboSyncedAt: string | null;
   /** When Bill.com AP is overlaid, the sync timestamp; else null. */
@@ -80,32 +93,96 @@ const QBO_AR_CATEGORIES = new Set(["currentAR", "overdueAR"]);
 // AP categories that Bill.com owns when synced (apEstimate stays manual).
 const BILL_AP_CATEGORIES = new Set(["accountsPayable"]);
 
+interface CloudDoc {
+  input: ForecastInput | null;
+  scenarios?: Scenario[];
+  apAdjustments?: Record<string, ApAdjustment>;
+}
+
+function readLocal(): Partial<AppState> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Partial<AppState>) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function putCloud(state: Pick<AppState, "input" | "scenarios" | "apAdjustments">): Promise<boolean> {
+  try {
+    const res = await fetch("/api/app-state", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: state.input,
+        scenarios: state.scenarios,
+        apAdjustments: state.apAdjustments,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState);
   const [ready, setReady] = useState(false);
+  const [storageMode, setStorageMode] = useState<StorageMode>("local");
   const [syncedAr, setSyncedAr] = useState<CashEvent[] | null>(null);
   const [qboSyncedAt, setQboSyncedAt] = useState<string | null>(null);
   const [syncedAp, setSyncedAp] = useState<CashEvent[] | null>(null);
   const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load: cloud first; migrate localStorage up on first cloud run; else local.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<AppState>;
-        if (parsed.input) {
-          setState({
-            input: parsed.input,
-            scenarios: parsed.scenarios ?? [],
-            prefs: { ...DEFAULT_PREFS, ...(parsed.prefs ?? {}) },
-            apAdjustments: parsed.apAdjustments ?? {},
-          });
+    let cancelled = false;
+    void (async () => {
+      const ls = readLocal();
+      const prefs = { ...DEFAULT_PREFS, ...(ls?.prefs ?? {}) };
+      let mode: StorageMode = "local";
+      let next: AppState | null = null;
+
+      try {
+        const res = await fetch("/api/app-state", { cache: "no-store" });
+        if (res.ok) {
+          mode = "cloud";
+          const doc = (await res.json()) as CloudDoc;
+          if (doc.input) {
+            next = {
+              input: doc.input,
+              scenarios: doc.scenarios ?? [],
+              apAdjustments: doc.apAdjustments ?? {},
+              prefs,
+            };
+          } else {
+            // First cloud run: adopt this browser's data (or the seed) and push it up.
+            const base = ls?.input
+              ? { input: ls.input, scenarios: ls.scenarios ?? [], apAdjustments: ls.apAdjustments ?? {} }
+              : { input: SEED_INPUT, scenarios: SEED_SCENARIOS, apAdjustments: {} };
+            next = { ...base, prefs };
+            void putCloud(base);
+          }
         }
+      } catch {
+        /* route unreachable — stay local */
       }
-    } catch {
-      /* corrupt storage — fall back to seed */
-    }
-    setReady(true);
+
+      if (!next) {
+        next = ls?.input
+          ? { input: ls.input, scenarios: ls.scenarios ?? [], apAdjustments: ls.apAdjustments ?? {}, prefs }
+          : { ...initialState(), prefs };
+      }
+      if (!cancelled) {
+        setState(next);
+        setStorageMode(mode);
+        setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const refreshQbo = useCallback(async () => {
@@ -120,7 +197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setQboSyncedAt(null);
       }
     } catch {
-      /* endpoint unavailable (e.g. not deployed) — stay on manual data */
+      /* endpoint unavailable — stay on manual data */
     }
   }, []);
 
@@ -145,6 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void refreshBill();
   }, [refreshQbo, refreshBill]);
 
+  // Persist on change: localStorage always (offline fallback), cloud debounced.
   useEffect(() => {
     if (!ready) return;
     try {
@@ -152,7 +230,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       /* storage unavailable — non-fatal */
     }
-  }, [state, ready]);
+    if (storageMode !== "cloud") return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void putCloud(state);
+    }, SAVE_DEBOUNCE_MS);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [state, ready, storageMode]);
 
   const setInput = useCallback(
     (updater: (prev: ForecastInput) => ForecastInput) =>
@@ -215,6 +301,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         scenarios: state.scenarios,
         prefs: state.prefs,
         ready,
+        storageMode,
         qboSyncedAt,
         billSyncedAt,
         syncedApRaw: syncedAp,
