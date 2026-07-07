@@ -15,6 +15,18 @@ const SCOPE = "com.intuit.quickbooks.accounting";
 
 export type QboEnvironment = "sandbox" | "production";
 
+/**
+ * Thrown when Intuit rejects our credentials (expired/revoked refresh token,
+ * or a 401 on a data call) — signals the user must reconnect, as opposed to a
+ * transient error worth leaving the connection intact for.
+ */
+export class QboAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QboAuthError";
+  }
+}
+
 export interface QboConfig {
   clientId: string;
   clientSecret: string;
@@ -82,7 +94,12 @@ async function tokenRequest(cfg: QboConfig, body: URLSearchParams): Promise<QboT
     body,
   });
   if (!res.ok) {
-    throw new Error(`QBO token request failed (${res.status}): ${await res.text()}`);
+    const body = await res.text();
+    // 400 (invalid_grant) / 401 → refresh token expired or revoked: reconnect.
+    if (res.status === 400 || res.status === 401) {
+      throw new QboAuthError(`QBO auth failed (${res.status}): ${body}`);
+    }
+    throw new Error(`QBO token request failed (${res.status}): ${body}`);
   }
   return (await res.json()) as QboTokens;
 }
@@ -132,7 +149,9 @@ export async function queryQbo(
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    throw new Error(`QBO query failed (${res.status}): ${await res.text()}`);
+    const body = await res.text();
+    if (res.status === 401) throw new QboAuthError(`QBO query unauthorized (401): ${body}`);
+    throw new Error(`QBO query failed (${res.status}): ${body}`);
   }
   const json = (await res.json()) as QboQueryResponse;
   return json.QueryResponse ?? {};

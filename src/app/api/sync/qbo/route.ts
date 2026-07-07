@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireCronAuth } from "@/lib/cron.js";
-import { qboConfig, queryQbo, refreshTokens } from "@/lib/integrations/qbo/client.js";
+import { QboAuthError, qboConfig, queryQbo, refreshTokens } from "@/lib/integrations/qbo/client.js";
 import { mapBills, mapInvoices, type QboBill, type QboInvoice } from "@/lib/integrations/qbo/map.js";
-import { appendLog, getConnection, saveConnection, saveSync } from "@/lib/integrations/store.js";
+import { appendLog, clearConnection, getConnection, saveConnection, saveSync } from "@/lib/integrations/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +77,15 @@ async function runQboSync() {
   } catch (e) {
     const message = (e as Error).message;
     await appendLog({ source: "qbo", startedAt, finishedAt: new Date().toISOString(), status: "error", message });
+    // Auth failure (expired/revoked tokens): drop the connection so the UI
+    // prompts the user to reconnect, rather than silently retrying bad creds.
+    if (e instanceof QboAuthError) {
+      await clearConnection();
+      return NextResponse.json(
+        { error: "QuickBooks connection expired — please reconnect.", needsReconnect: true },
+        { status: 401 },
+      );
+    }
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

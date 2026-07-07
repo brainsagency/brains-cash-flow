@@ -62,6 +62,9 @@ export function saveConnection(c: QboConnection): Promise<void> {
 export function getConnection(): Promise<QboConnection | null> {
   return isSupabaseConfigured() ? sbGetConnection() : fileGetConnection();
 }
+export function clearConnection(): Promise<void> {
+  return isSupabaseConfigured() ? sbClearConnection() : fileClearConnection();
+}
 export function saveSync(r: QboSyncResult): Promise<void> {
   return isSupabaseConfigured() ? sbSaveSync(r) : fileSaveSync(r);
 }
@@ -110,6 +113,11 @@ async function sbGetConnection(): Promise<QboConnection | null> {
     accessTokenExpiresAt: Number(data.access_token_expires_at),
     connectedAt: data.connected_at as string,
   };
+}
+
+async function sbClearConnection(): Promise<void> {
+  const { error } = await supabaseAdmin().from("qbo_connection").delete().eq("id", "default");
+  if (error) throw new Error(`Supabase clearConnection: ${error.message}`);
 }
 
 async function sbSaveSync(r: QboSyncResult): Promise<void> {
@@ -215,6 +223,11 @@ async function fileSaveConnection(connection: QboConnection): Promise<void> {
 }
 async function fileGetConnection(): Promise<QboConnection | null> {
   return (await fileRead()).connection ?? null;
+}
+async function fileClearConnection(): Promise<void> {
+  const s = await fileRead();
+  delete s.connection;
+  await fileWrite(s);
 }
 async function fileSaveSync(lastSync: QboSyncResult): Promise<void> {
   await fileWrite({ ...(await fileRead()), lastSync });
