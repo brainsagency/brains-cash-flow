@@ -47,6 +47,13 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
     return { date: p.period.start, days: Math.max(0, daysBetween(result.anchorDate, p.period.start)) };
   }, [result, threshold]);
 
+  // The true cash-out: first period the balance goes below $0.
+  const cashOut = useMemo(() => {
+    const p = result.periods.find((pp) => pp.endingBalance < 0);
+    if (!p) return null;
+    return { date: p.period.start, days: Math.max(0, daysBetween(result.anchorDate, p.period.start)) };
+  }, [result]);
+
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 14 }}>
@@ -82,6 +89,18 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
       <div className="grid hero">
         <div className="callout">
           <Stat name="Today's balance" date={fmtShortDate(result.anchorDate)} value={fmtMoney(result.startingCash)} sub={`From ${accountCount} bank account${accountCount === 1 ? "" : "s"}`} />
+          <Stat
+            name="Cash-out (below $0)"
+            value={cashOut ? fmtDuration(cashOut.days, view === "week" ? "days" : "months") : "—"}
+            sub={cashOut ? fmtShortDate(cashOut.date) : "stays above $0"}
+            neg={!!cashOut}
+          />
+          <Stat
+            name={`Drops below ${fmtMoney(threshold)}`}
+            value={breach ? fmtDuration(breach.days, view === "week" ? "days" : "months") : "—"}
+            sub={breach ? fmtShortDate(breach.date) : "stays above the floor"}
+            neg={!!breach}
+          />
           {lowest && (
             <Stat
               name="Lowest balance"
@@ -90,12 +109,6 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
               neg={lowest.amount < 0}
             />
           )}
-          <Stat
-            name={`Drops below ${fmtMoney(threshold)}`}
-            value={breach ? fmtDuration(breach.days, view === "week" ? "days" : "months") : "—"}
-            sub={breach ? fmtShortDate(breach.date) : "stays above the floor"}
-            neg={!!breach}
-          />
         </div>
 
         <CashChart series={series} threshold={threshold} overlays={overlays} todayLabel="today" />

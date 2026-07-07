@@ -84,6 +84,9 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
   const gridVals = Array.from({ length: ticks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / ticks);
   const labelStep = Math.max(1, Math.ceil(n / 7));
 
+  const zeroInView = yMin < 0 && yMax > 0;
+  const cashOutIdx = series.findIndex((p) => p.ending < 0);
+
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -137,6 +140,17 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
           </text>
         </g>
 
+        {/* $0 reference line + boxed label */}
+        {zeroInView && (
+          <g>
+            <line x1={PAD.left} y1={y(0)} x2={VBW - PAD.right} y2={y(0)} stroke="#16232b" strokeWidth={1.2} strokeOpacity={0.55} />
+            <rect x={PAD.left - 52} y={y(0) - 9} width={48} height={18} rx={4} fill="#d84a4a" />
+            <text x={PAD.left - 28} y={y(0) + 4} textAnchor="middle" fontSize={10.5} fill="#fff">
+              $0
+            </text>
+          </g>
+        )}
+
         {/* area + base step line */}
         <path d={stepArea(series)} fill="url(#cashFill)" />
         <path d={stepLine(series)} fill="none" stroke={BASE_LINE_COLOR} strokeWidth={2.2} strokeLinejoin="round" />
@@ -145,6 +159,16 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
         {overlays.map((o) => (
           <path key={o.name} d={stepLine(o.points)} fill="none" stroke={o.color} strokeWidth={1.9} strokeDasharray="5 4" strokeLinejoin="round" />
         ))}
+
+        {/* cash-out marker: first period the balance goes below $0 */}
+        {cashOutIdx > 0 && (
+          <g>
+            <line x1={x(cashOutIdx)} y1={PAD.top} x2={x(cashOutIdx)} y2={baseY} stroke="#d84a4a" strokeWidth={1.4} strokeDasharray="4 3" />
+            <text x={x(cashOutIdx) - 5} y={PAD.top + 11} textAnchor="end" fontSize={10.5} fill="#d84a4a">
+              cash-out
+            </text>
+          </g>
+        )}
 
         {/* today marker (start of forecast) */}
         <line x1={x(0)} y1={PAD.top} x2={x(0)} y2={baseY} stroke="#d84a4a" strokeWidth={1.4} />
