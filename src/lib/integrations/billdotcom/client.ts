@@ -22,11 +22,14 @@ export interface BillConfig {
 export interface BillDotComBill {
   id: string;
   amount?: number;
+  dueAmount?: number; // remaining unpaid balance
   dueDate?: string; // yyyy-MM-dd
-  invoiceNumber?: string;
+  invoice?: { invoiceNumber?: string };
   vendorId?: string;
+  vendorName?: string;
   approvalStatus?: string; // e.g. UNASSIGNED, ASSIGNED, APPROVED
-  paymentStatus?: string; // e.g. UNPAID, PARTIALLYPAID, SCHEDULED, PAID
+  paymentStatus?: string; // e.g. UNPAID, PAID
+  archived?: boolean; // old/abandoned bills are archived, not paid
 }
 
 export function billConfig(): BillConfig {
@@ -101,17 +104,4 @@ async function getPaged<T>(cfg: BillConfig, sessionId: string, path: string): Pr
 
 export function listBills(cfg: BillConfig, sessionId: string): Promise<BillDotComBill[]> {
   return getPaged<BillDotComBill>(cfg, sessionId, "/v3/bills");
-}
-
-interface BillVendor {
-  id: string;
-  name?: string;
-}
-
-/** Map vendorId → vendor name for nicer ledger labels. */
-export async function listVendorNames(cfg: BillConfig, sessionId: string): Promise<Record<string, string>> {
-  const vendors = await getPaged<BillVendor>(cfg, sessionId, "/v3/vendors");
-  const map: Record<string, string> = {};
-  for (const v of vendors) if (v.name) map[v.id] = v.name;
-  return map;
 }

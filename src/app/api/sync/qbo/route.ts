@@ -6,6 +6,8 @@ import { appendLog, getConnection, saveConnection, saveSync } from "@/lib/integr
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Headroom for cold starts + real invoice volume once QBO goes production.
+export const maxDuration = 300;
 
 const REFRESH_SKEW_MS = 60_000; // refresh a minute before expiry
 

@@ -2,6 +2,10 @@
  * Map BILL (Bill.com) bills to the engine's `CashEvent` shape (AP feed).
  * Bill.com is the AP source of truth; QBO Bills validate it (see reconcile.ts).
  *
+ * Verified against the production org: bills carry `vendorName` and
+ * `dueAmount` (remaining balance) directly, and old abandoned bills are
+ * `archived` rather than marked paid — so archived bills are excluded.
+ *
  * Pure and unit-tested.
  */
 
@@ -21,33 +25,42 @@ function label(vendorName: string | undefined, invoiceNumber: string | undefined
 export interface BillLike {
   id: string;
   amount?: number;
+  /** Remaining unpaid balance — preferred over `amount` when present. */
+  dueAmount?: number;
   dueDate?: string;
   invoiceNumber?: string;
+  /** v3 nests the vendor invoice number under `invoice`. */
+  invoice?: { invoiceNumber?: string };
   vendorId?: string;
+  vendorName?: string;
   paymentStatus?: string;
+  /** Old/abandoned bills are archived instead of paid — not real payables. */
+  archived?: boolean;
 }
 
 /**
- * Bill → AP event. Null for fully-paid or zero bills. Past-due bills are swept
- * to the anchor (paid in the current week), matching the sheet's AP logic.
+ * Bill → AP event. Null for archived, fully-paid, or zero-balance bills.
+ * Past-due bills are swept to the anchor (paid in the current week), matching
+ * the sheet's AP logic. Amount = remaining balance (`dueAmount`).
  */
 export function mapBill(
   bill: BillLike,
   anchor: ISODate,
   vendorNames: Record<string, string> = {},
 ): CashEvent | null {
+  if (bill.archived) return null;
   if (bill.paymentStatus && PAID_STATUSES.has(bill.paymentStatus)) return null;
-  const amount = bill.amount ?? 0;
+  const amount = bill.dueAmount ?? bill.amount ?? 0;
   if (amount <= 0) return null;
   const due = bill.dueDate ?? anchor;
-  const vendorName = bill.vendorId ? vendorNames[bill.vendorId] : undefined;
+  const vendorName = bill.vendorName ?? (bill.vendorId ? vendorNames[bill.vendorId] : undefined);
   return {
     id: `bill-${bill.id}`,
     category: "accountsPayable",
     amount,
     date: due < anchor ? anchor : due,
     basis: "committed",
-    memo: label(vendorName, bill.invoiceNumber),
+    memo: label(vendorName, bill.invoiceNumber ?? bill.invoice?.invoiceNumber),
   };
 }
 

@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireCronAuth } from "@/lib/cron.js";
-import { billConfig, listBills, listVendorNames, login } from "@/lib/integrations/billdotcom/client.js";
+import { billConfig, listBills, login } from "@/lib/integrations/billdotcom/client.js";
 import { mapBills } from "@/lib/integrations/billdotcom/map.js";
 import { reconcileAp } from "@/lib/integrations/billdotcom/reconcile.js";
 import { appendLog, getLastSync, saveBillSync } from "@/lib/integrations/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Production sync pages through every bill/vendor (~1-2 min observed).
+export const maxDuration = 300;
 
 /** UI-triggered sync (page is already behind the password gate). */
 export function POST(_req: NextRequest) {
@@ -36,12 +38,10 @@ async function runBillSync() {
   try {
     const sessionId = await login(cfg);
     const anchor = new Date().toISOString().slice(0, 10);
-    const [bills, vendorNames] = await Promise.all([
-      listBills(cfg, sessionId),
-      listVendorNames(cfg, sessionId).catch(() => ({}) as Record<string, string>),
-    ]);
+    // Bills carry vendorName directly — no separate vendors call needed.
+    const bills = await listBills(cfg, sessionId);
 
-    const apEvents = mapBills(bills, anchor, vendorNames);
+    const apEvents = mapBills(bills, anchor);
     const apTotal = apEvents.reduce((s, e) => s + e.amount, 0);
 
     // Cross-check vs QuickBooks Bills (validation set from the QBO sync).

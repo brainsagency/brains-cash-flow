@@ -2,14 +2,21 @@ import { describe, expect, it } from "vitest";
 import { mapBill, mapBills } from "./map.js";
 
 const ANCHOR = "2026-07-06";
-const VENDORS = { "009abc": "Norton Lumber" };
 
 describe("Bill.com mapBill", () => {
-  it("maps an unpaid bill to accountsPayable on its due date with vendor name", () => {
+  it("maps an unpaid bill using vendorName, nested invoice number, and dueAmount", () => {
     const e = mapBill(
-      { id: "00n123", amount: 225, dueDate: "2026-08-01", invoiceNumber: "INV-9", vendorId: "009abc", paymentStatus: "UNPAID" },
+      {
+        id: "00n123",
+        amount: 300,
+        dueAmount: 225, // partially paid — remaining balance is what hits cash
+        dueDate: "2026-08-01",
+        invoice: { invoiceNumber: "INV-9" },
+        vendorName: "Norton Lumber",
+        paymentStatus: "UNPAID",
+        archived: false,
+      },
       ANCHOR,
-      VENDORS,
     );
     expect(e).toEqual({
       id: "bill-00n123",
@@ -21,27 +28,40 @@ describe("Bill.com mapBill", () => {
     });
   });
 
-  it("skips fully-paid or zero bills", () => {
+  it("excludes archived bills (old/abandoned, not real payables)", () => {
+    const e = mapBill(
+      { id: "1", amount: 5000, dueAmount: 5000, dueDate: "2019-03-19", paymentStatus: "UNPAID", archived: true },
+      ANCHOR,
+    );
+    expect(e).toBeNull();
+  });
+
+  it("skips fully-paid or zero-balance bills", () => {
     expect(mapBill({ id: "1", amount: 100, dueDate: "2026-08-01", paymentStatus: "PAID" }, ANCHOR)).toBeNull();
-    expect(mapBill({ id: "2", amount: 0, dueDate: "2026-08-01", paymentStatus: "UNPAID" }, ANCHOR)).toBeNull();
+    expect(mapBill({ id: "2", amount: 100, dueAmount: 0, dueDate: "2026-08-01", paymentStatus: "UNPAID" }, ANCHOR)).toBeNull();
   });
 
   it("sweeps past-due bills to the anchor", () => {
-    const e = mapBill({ id: "3", amount: 500, dueDate: "2026-05-01", paymentStatus: "UNPAID" }, ANCHOR);
+    const e = mapBill({ id: "3", dueAmount: 500, dueDate: "2026-05-01", paymentStatus: "UNPAID" }, ANCHOR);
     expect(e?.date).toBe(ANCHOR);
   });
 
-  it("falls back to vendorId label when no name and no invoice number", () => {
-    const e = mapBill({ id: "4", amount: 10, dueDate: "2026-09-01", paymentStatus: "UNPAID" }, ANCHOR);
-    expect(e?.memo).toBe("—");
+  it("falls back to amount when dueAmount is absent, and to vendorNames map", () => {
+    const e = mapBill(
+      { id: "4", amount: 10, dueDate: "2026-09-01", paymentStatus: "UNPAID", vendorId: "009x" },
+      ANCHOR,
+      { "009x": "Acme" },
+    );
+    expect(e?.amount).toBe(10);
+    expect(e?.memo).toBe("Acme");
   });
 
-  it("batch maps and filters", () => {
+  it("batch maps and filters archived + paid", () => {
     const events = mapBills(
       [
-        { id: "a", amount: 100, dueDate: "2026-08-01", paymentStatus: "UNPAID" },
-        { id: "b", amount: 0, dueDate: "2026-08-01", paymentStatus: "UNPAID" },
-        { id: "c", amount: 50, dueDate: "2026-08-01", paymentStatus: "PAID" },
+        { id: "a", dueAmount: 100, dueDate: "2026-08-01", paymentStatus: "UNPAID" },
+        { id: "b", dueAmount: 100, dueDate: "2026-08-01", paymentStatus: "UNPAID", archived: true },
+        { id: "c", dueAmount: 50, dueDate: "2026-08-01", paymentStatus: "PAID" },
       ],
       ANCHOR,
     );
