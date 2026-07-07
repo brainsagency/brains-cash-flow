@@ -16,7 +16,7 @@ const STATUS: Record<string, { label: string; chip: string }> = {
   apEstimate: { label: "Estimate", chip: "neutral" },
 };
 
-export function ReceivablesPayables() {
+export function ReceivablesPayables({ show = "both" }: { show?: "ar" | "ap" | "both" }) {
   const { input } = useStore();
   const events = useMemo(() => input.events ?? [], [input]);
 
@@ -26,33 +26,42 @@ export function ReceivablesPayables() {
   const sumOf = (cat: CashCategory) =>
     events.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0);
 
+  const arCard = (
+    <LedgerCard
+      title="Accounts Receivable"
+      items={ar}
+      total={ar.reduce((s, e) => s + e.amount, 0)}
+      entity="Client / project"
+      dateLabel="Expected"
+      aging={[
+        { label: "Current", value: sumOf("currentAR") },
+        { label: "Overdue", value: sumOf("overdueAR"), danger: true },
+        { label: "Not invoiced", value: sumOf("notInvoiced") },
+      ]}
+      emptyHint="No receivables — add in Assumptions, or sync from QuickBooks."
+    />
+  );
+  const apCard = (
+    <LedgerCard
+      title="Accounts Payable"
+      items={ap}
+      total={ap.reduce((s, e) => s + e.amount, 0)}
+      entity="Vendor / bill"
+      dateLabel="Pay date"
+      aging={[
+        { label: "Scheduled", value: sumOf("accountsPayable") },
+        { label: "Estimate", value: sumOf("apEstimate") },
+      ]}
+      emptyHint="No payables — add in Assumptions, or sync from Bill.com."
+    />
+  );
+
+  if (show === "ar") return arCard;
+  if (show === "ap") return apCard;
   return (
     <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}>
-      <LedgerCard
-        title="Accounts Receivable"
-        items={ar}
-        total={ar.reduce((s, e) => s + e.amount, 0)}
-        entity="Client / project"
-        dateLabel="Expected"
-        aging={[
-          { label: "Current", value: sumOf("currentAR") },
-          { label: "Overdue", value: sumOf("overdueAR"), danger: true },
-          { label: "Not invoiced", value: sumOf("notInvoiced") },
-        ]}
-        emptyHint="No receivables — add in Assumptions, or sync from QuickBooks."
-      />
-      <LedgerCard
-        title="Accounts Payable"
-        items={ap}
-        total={ap.reduce((s, e) => s + e.amount, 0)}
-        entity="Vendor / bill"
-        dateLabel="Pay date"
-        aging={[
-          { label: "Scheduled", value: sumOf("accountsPayable") },
-          { label: "Estimate", value: sumOf("apEstimate") },
-        ]}
-        emptyHint="No payables — add in Assumptions, or sync from Bill.com."
-      />
+      {arCard}
+      {apCard}
     </div>
   );
 }

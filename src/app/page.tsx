@@ -5,13 +5,14 @@ import { forecast, runScenario, type ForecastInput, type HorizonConfig } from "@
 import { useStore } from "@/lib/data/store.js";
 import { OVERLAY_COLORS } from "@/lib/categories.js";
 import { fmtAxisLabel } from "@/lib/format.js";
+import { Sidebar, NAV, type ViewKey } from "@/components/Sidebar.js";
 import { KpiCards } from "@/components/KpiCards.js";
 import { type Overlay } from "@/components/CashChart.js";
 import { CashFlowCard, type RangeOption } from "@/components/CashFlowCard.js";
+import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
-import { CashMatrix } from "@/components/CashMatrix.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 
@@ -31,6 +32,7 @@ const MONTH_RANGES: RangeOption[] = [
 
 export default function Dashboard() {
   const { input, scenarios, prefs, setPrefs } = useStore();
+  const [nav, setNav] = useState<ViewKey>("cashflow");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { view, weekRange, monthRange } = prefs;
   const setView = (v: "week" | "month") => setPrefs({ view: v });
@@ -47,12 +49,11 @@ export default function Dashboard() {
     return OVERLAY_COLORS[idx % OVERLAY_COLORS.length]!;
   };
 
-  // Base (input's own horizon) drives KPIs / alerts / narrative / matrix.
   const base = useMemo(() => forecast(input), [input]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const active = useMemo(() => forecast({ ...input, horizon: activeHorizon }), [input, view, weekRange, monthRange]);
 
-  const buildOverlays = (baseInput: ForecastInput, view: "week" | "month"): Overlay[] =>
+  const buildOverlays = (baseInput: ForecastInput, v: "week" | "month"): Overlay[] =>
     selectedIds
       .map((id) => {
         const scenario = scenarios.find((s) => s.id === id);
@@ -63,7 +64,7 @@ export default function Dashboard() {
           color: colorFor(id),
           points: r.periods.map((p) => ({
             date: p.period.start,
-            label: fmtAxisLabel(p.period.start, view),
+            label: fmtAxisLabel(p.period.start, v),
             ending: p.endingBalance,
           })),
         };
@@ -76,7 +77,6 @@ export default function Dashboard() {
     [input, scenarios, selectedIds, view, weekRange, monthRange],
   );
 
-  // Scenario compare table uses the input's own horizon.
   const views: ScenarioView[] = useMemo(
     () =>
       selectedIds
@@ -93,67 +93,67 @@ export default function Dashboard() {
   const toggle = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  const pageTitle = NAV.find((n) => n.key === nav)?.title ?? "Cash Flow";
+
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <h1>Brains Cash Flow</h1>
-          <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
-        </div>
-        <span className="badge">
-          <span className="dot" /> Sample data · live syncs pending
-        </span>
-      </header>
+    <div className="layout">
+      <Sidebar active={nav} onSelect={setNav} />
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <h1>{pageTitle}</h1>
+            <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
+          </div>
+          <span className="badge">
+            <span className="dot" /> Sample data · live syncs pending
+          </span>
+        </header>
 
-      <CashFlowCard
-        view={view}
-        onView={setView}
-        result={active}
-        overlays={activeOverlays}
-        rangeOptions={view === "week" ? WEEK_RANGES : MONTH_RANGES}
-        rangeValue={view === "week" ? weekRange : monthRange}
-        onRange={view === "week" ? setWeekRange : setMonthRange}
-      />
+        {nav === "cashflow" && (
+          <div className="grid" style={{ gap: 16 }}>
+            <CashFlowCard
+              view={view}
+              onView={setView}
+              result={active}
+              overlays={activeOverlays}
+              rangeOptions={view === "week" ? WEEK_RANGES : MONTH_RANGES}
+              rangeValue={view === "week" ? weekRange : monthRange}
+              onRange={view === "week" ? setWeekRange : setMonthRange}
+            />
+            <CashMatrix result={active} view={view} />
+          </div>
+        )}
 
-      <div className="section-title">
-        <h2>Key metrics</h2>
-      </div>
-      <KpiCards result={base} />
+        {nav === "invoices" && <ReceivablesPayables show="ar" />}
+        {nav === "bills" && <ReceivablesPayables show="ap" />}
 
-      <div className="grid two-col" style={{ marginTop: 16 }}>
-        <NarrativePanel result={base} />
-        <AlertsPanel alerts={base.alerts} />
-      </div>
+        {nav === "scenarios" && (
+          <ScenarioPanel
+            scenarios={scenarios}
+            selectedIds={selectedIds}
+            colorFor={colorFor}
+            onToggle={toggle}
+            base={base}
+            views={views}
+          />
+        )}
 
-      <div className="section-title">
-        <h2>Receivables &amp; payables</h2>
-      </div>
-      <ReceivablesPayables />
+        {nav === "insights" && (
+          <div className="grid" style={{ gap: 16 }}>
+            <KpiCards result={base} />
+            <div className="grid two-col">
+              <NarrativePanel result={base} />
+              <AlertsPanel alerts={base.alerts} />
+            </div>
+          </div>
+        )}
 
-      <div className="section-title">
-        <h2>Scenario planning</h2>
-      </div>
-      <ScenarioPanel
-        scenarios={scenarios}
-        selectedIds={selectedIds}
-        colorFor={colorFor}
-        onToggle={toggle}
-        base={base}
-        views={views}
-      />
+        {nav === "assumptions" && <AssumptionsPanel />}
 
-      <div className="section-title">
-        <h2>Detail</h2>
-      </div>
-      <CashMatrix result={base} />
-
-      <div style={{ marginTop: 16 }}>
-        <AssumptionsPanel />
-      </div>
-
-      <footer className="muted" style={{ marginTop: 32, textAlign: "center" }}>
-        Read-only against financial systems · figures are projections, reconcile against the sheet before acting
-      </footer>
-    </main>
+        <footer className="muted" style={{ marginTop: 32 }}>
+          Read-only against financial systems · figures are projections, reconcile against the sheet before acting
+        </footer>
+      </main>
+    </div>
   );
 }

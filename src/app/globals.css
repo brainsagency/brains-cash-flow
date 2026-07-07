@@ -63,6 +63,154 @@ select {
   padding: 24px 20px 80px;
 }
 
+/* App shell: left sidebar + main content */
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 236px;
+  flex: none;
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.sidebar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding: 6px 8px 12px;
+}
+.sidebar .brand .logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+.company {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.company .sq {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+}
+.nav-item:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+.nav-item.active {
+  background: rgba(11, 122, 91, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+.nav-item svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.sidebar-footer .avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px 80px;
+}
+@media (max-width: 820px) {
+  .layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: auto;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    gap: 6px;
+  }
+  .sidebar .brand,
+  .company,
+  .sidebar-footer {
+    display: none;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+  }
+  .nav-item span {
+    display: none;
+  }
+  .main {
+    padding: 16px;
+  }
+}
+
 .topbar {
   display: flex;
   align-items: baseline;
@@ -119,6 +267,8 @@ select {
 .grid {
   display: grid;
   gap: 16px;
+  /* Single-column default that won't grow past its parent (SVG/table content). */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .kpi-row {
@@ -158,8 +308,13 @@ select {
 
 /* Float-style hero: stat callout + chart side by side */
 .hero {
-  grid-template-columns: 230px 1fr;
+  /* minmax(0, …) lets the chart column shrink instead of growing to the
+     SVG's intrinsic size and overflowing. */
+  grid-template-columns: 230px minmax(0, 1fr);
   align-items: stretch;
+}
+.hero > * {
+  min-width: 0;
 }
 @media (max-width: 780px) {
   .hero {
@@ -214,7 +369,7 @@ select {
 }
 
 .two-col {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 @media (max-width: 820px) {
   .two-col {
