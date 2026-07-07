@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# env & secrets — NEVER commit integration tokens
+.env
+.env.*
+!.env.example
+
+# test / coverage
+coverage/
+
+# source spreadsheets / exports — bank-connected data, never commit
+*.xlsx
+*.xls
+*.csv
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
