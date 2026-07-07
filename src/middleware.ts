@@ -29,5 +29,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)"],
+  // /terms and /privacy stay public: Intuit's app review must reach them.
+  matcher: ["/((?!login|terms|privacy|api/auth|_next/static|_next/image|favicon.ico).*)"],
 };

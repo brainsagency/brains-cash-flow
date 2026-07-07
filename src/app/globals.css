@@ -672,6 +672,26 @@ details.editor[open] > summary::before {
   color: var(--text);
 }
 
+/* Public legal pages (/terms, /privacy) */
+.legal {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+.legal h1 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.legal h2 {
+  font-size: 15px;
+  margin: 24px 0 6px;
+}
+.legal p {
+  margin: 0 0 10px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
 .login-wrap {
   min-height: 100vh;
   display: grid;
