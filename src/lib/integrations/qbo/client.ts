@@ -198,7 +198,11 @@ export async function queryQbo(
     const body = await res.text();
     const tid = res.headers.get("intuit_tid");
     const suffix = tid ? ` [intuit_tid: ${tid}]` : "";
-    if (res.status === 401) throw new QboAuthError(`QBO query unauthorized (401)${suffix}: ${body}`);
+    // 401, or 403 ApplicationAuthorizationFailed (e.g. wrong realm/env, app
+    // not authorized) → the connection is invalid: prompt reconnect.
+    if (res.status === 401 || res.status === 403) {
+      throw new QboAuthError(`QBO query authorization failed (${res.status})${suffix}: ${body}`);
+    }
     throw new Error(`QBO query failed (${res.status})${suffix}: ${body}`);
   }
   const json = (await res.json()) as QboQueryResponse;

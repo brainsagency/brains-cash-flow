@@ -56,9 +56,14 @@ export function QboPanel() {
         <span className="chip neutral" style={{ marginLeft: 4 }}>{status?.environment ?? "sandbox"}</span>
         <div className="spacer" />
         {status?.connected ? (
-          <button className="btn sm primary" onClick={refresh} disabled={syncing}>
-            {syncing ? "Syncing…" : "Refresh AR"}
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            <a className="btn sm ghost" href="/api/connect/qbo/start" title="Re-authorize or switch to a different QuickBooks company">
+              Reconnect
+            </a>
+            <button className="btn sm primary" onClick={refresh} disabled={syncing}>
+              {syncing ? "Syncing…" : "Refresh AR"}
+            </button>
+          </div>
         ) : (
           <a className={`btn sm primary ${status?.configured ? "" : "ghost"}`} href="/api/connect/qbo/start">
             Connect QuickBooks
