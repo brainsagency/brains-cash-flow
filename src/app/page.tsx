@@ -13,6 +13,7 @@ import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
+import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 
@@ -125,7 +126,12 @@ export default function Dashboard() {
         )}
 
         {nav === "invoices" && <ReceivablesPayables show="ar" />}
-        {nav === "bills" && <ReceivablesPayables show="ap" />}
+        {nav === "bills" && (
+          <div className="grid" style={{ gap: 16 }}>
+            <ReceivablesPayables show="ap" />
+            <OtherWithdrawals />
+          </div>
+        )}
 
         {nav === "scenarios" && (
           <ScenarioPanel
