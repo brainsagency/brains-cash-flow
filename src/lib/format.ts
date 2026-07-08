@@ -36,6 +36,19 @@ export function fmtDate(iso: string): string {
   return iso;
 }
 
+/** Today as an ISO date (YYYY-MM-DD), local time. */
+export function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Whole days between an ISO date and today (>= 0 for past dates). */
+export function daysAgo(iso: string): number {
+  const then = new Date(`${iso}T00:00:00`).getTime();
+  const now = new Date(`${todayISO()}T00:00:00`).getTime();
+  return Math.round((now - then) / 86_400_000);
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "2026-11-24" -> "24 Nov '26". */

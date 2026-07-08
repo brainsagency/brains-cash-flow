@@ -142,6 +142,11 @@ export interface BankAccount {
    * (Cash Flow row 35 = D29+D30). Set `operating: false` for those.
    */
   operating?: boolean;
+  /**
+   * Date the balance was last entered/updated (manual bank feeds). Display
+   * metadata for staleness warnings; the engine ignores it.
+   */
+  balanceAsOf?: ISODate;
 }
 
 /**

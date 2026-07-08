@@ -14,11 +14,11 @@ export const SEED_INPUT: ForecastInput = {
   anchorDate: SEED_ANCHOR,
   // Real balances from the sheet. Only Checking + Savings are operating.
   bankAccounts: [
-    { id: "chk", name: "Checking", mask: "0377", beginningBalance: 380_944.6 },
-    { id: "sav", name: "Savings", mask: "1535", beginningBalance: 253_517.57 },
-    { id: "hysa", name: "HYSA", beginningBalance: 0, operating: false },
-    { id: "shr", name: "Shareholder", mask: "8987", beginningBalance: 89_988.84, operating: false },
-    { id: "prod", name: "Production", beginningBalance: 685_655.51, operating: false },
+    { id: "chk", name: "Checking", mask: "0377", beginningBalance: 380_944.6, balanceAsOf: SEED_ANCHOR },
+    { id: "sav", name: "Savings", mask: "1535", beginningBalance: 253_517.57, balanceAsOf: SEED_ANCHOR },
+    { id: "hysa", name: "HYSA", beginningBalance: 0, operating: false, balanceAsOf: SEED_ANCHOR },
+    { id: "shr", name: "Shareholder", mask: "8987", beginningBalance: 89_988.84, operating: false, balanceAsOf: SEED_ANCHOR },
+    { id: "prod", name: "Production", beginningBalance: 685_655.51, operating: false, balanceAsOf: SEED_ANCHOR },
   ],
   // --- SAMPLE flows (edit or replace with synced data) ---
   recurring: [

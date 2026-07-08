@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { forecast, runScenario, type ForecastInput, type HorizonConfig } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { OVERLAY_COLORS } from "@/lib/categories.js";
-import { fmtAxisLabel } from "@/lib/format.js";
+import { daysAgo, fmtAxisLabel } from "@/lib/format.js";
 import { Sidebar, NAV, type ViewKey } from "@/components/Sidebar.js";
 import { KpiCards } from "@/components/KpiCards.js";
 import { type Overlay } from "@/components/CashChart.js";
@@ -119,6 +119,14 @@ export default function Dashboard() {
 
   const pageTitle = NAV.find((n) => n.key === nav)?.title ?? "Cash Flow";
   const stale = staleFeeds(qboSyncedAt, billSyncedAt);
+  // Oldest operating bank balance — manual entry, so warn if it's drifting.
+  const bankStaleDays = Math.max(
+    0,
+    ...input.bankAccounts
+      .filter((a) => a.operating !== false)
+      .map((a) => (a.balanceAsOf ? daysAgo(a.balanceAsOf) : 9999)),
+  );
+  const bankStale = bankStaleDays >= 10;
 
   return (
     <div className="layout">
@@ -151,6 +159,16 @@ export default function Dashboard() {
               <b>Stale data:</b>{" "}
               {stale.map((f) => `${f.name} last synced ${f.hours}h ago`).join("; ")}. The forecast may be out of
               date — refresh from the source panel, or check the nightly sync.
+            </span>
+          </div>
+        )}
+
+        {bankStale && (
+          <div className="alert warning" style={{ marginBottom: 16 }}>
+            <span className="ico">🏦</span>
+            <span>
+              <b>Bank balances are {bankStaleDays === 9999 ? "undated" : `${bankStaleDays} days old`}.</b> Starting
+              cash drives the whole forecast — update them in Assumptions when you next reconcile.
             </span>
           </div>
         )}

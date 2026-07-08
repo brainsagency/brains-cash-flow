@@ -3,6 +3,7 @@
 import { type CashEvent, type ForecastInput, type RecurringItem } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { ALL_CATEGORIES, CATEGORY_LABELS } from "@/lib/categories.js";
+import { daysAgo, fmtShortDate, todayISO } from "@/lib/format.js";
 
 export function AssumptionsPanel() {
   const { input, setInput, reset, storageMode } = useStore();
@@ -79,6 +80,8 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+const STALE_BALANCE_DAYS = 10;
+
 function BankAccounts() {
   const { input, setInput } = useStore();
   const update = (id: string, p: Partial<(typeof input.bankAccounts)[number]>) =>
@@ -86,32 +89,45 @@ function BankAccounts() {
       ...prev,
       bankAccounts: prev.bankAccounts.map((a) => (a.id === id ? { ...a, ...p } : a)),
     }));
+  // Editing a balance stamps it as updated today.
+  const setBalance = (id: string, value: number) => update(id, { beginningBalance: value, balanceAsOf: todayISO() });
 
   return (
-    <Group title="Bank accounts (which count toward operating cash)">
-      {input.bankAccounts.map((a) => (
-        <div className="row" key={a.id} style={{ marginBottom: 6 }}>
-          <div style={{ width: 150 }}>
-            {a.name}
-            {a.mask ? ` …${a.mask}` : ""}
+    <Group title="Bank accounts (manually entered — which count toward operating cash)">
+      {input.bankAccounts.map((a) => {
+        const age = a.balanceAsOf ? daysAgo(a.balanceAsOf) : null;
+        const stale = age !== null && age >= STALE_BALANCE_DAYS;
+        return (
+          <div className="row" key={a.id} style={{ marginBottom: 6 }}>
+            <div style={{ width: 150 }}>
+              {a.name}
+              {a.mask ? ` …${a.mask}` : ""}
+            </div>
+            <div className="field" style={{ width: 150 }}>
+              <input
+                type="number"
+                value={a.beginningBalance}
+                onChange={(e) => setBalance(a.id, Number(e.target.value))}
+              />
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={a.operating !== false}
+                onChange={(e) => update(a.id, { operating: e.target.checked })}
+              />
+              operating
+            </label>
+            <span className={`chip ${stale ? "danger" : "neutral"}`} style={{ marginLeft: 4 }}>
+              {a.balanceAsOf ? `as of ${fmtShortDate(a.balanceAsOf)}${stale ? ` · ${age}d old` : ""}` : "no date"}
+            </span>
           </div>
-          <div className="field" style={{ width: 150 }}>
-            <input
-              type="number"
-              value={a.beginningBalance}
-              onChange={(e) => update(a.id, { beginningBalance: Number(e.target.value) })}
-            />
-          </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={a.operating !== false}
-              onChange={(e) => update(a.id, { operating: e.target.checked })}
-            />
-            operating
-          </label>
-        </div>
-      ))}
+        );
+      })}
+      <div className="muted" style={{ marginTop: 8 }}>
+        Editing a balance stamps it as updated today. Update these when you reconcile — balances older than{" "}
+        {STALE_BALANCE_DAYS} days are flagged.
+      </div>
     </Group>
   );
 }

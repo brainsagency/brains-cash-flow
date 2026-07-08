@@ -33,7 +33,13 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
     [result, view],
   );
 
-  const accountCount = result.bankAccounts.filter((a) => a.operating !== false).length;
+  const operating = result.bankAccounts.filter((a) => a.operating !== false);
+  const accountCount = operating.length;
+  // Oldest operating balance-as-of date, so "today's balance" shows its currency.
+  const balanceAsOf = operating
+    .map((a) => a.balanceAsOf)
+    .filter((d): d is string => Boolean(d))
+    .sort()[0];
 
   const breach = useMemo(() => {
     const p = result.periods.find((pp) => pp.endingBalance < threshold);
@@ -82,7 +88,12 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
 
       <div className="grid hero">
         <div className="callout">
-          <Stat name="Today's balance" date={fmtShortDate(result.anchorDate)} value={fmtMoney(result.startingCash)} sub={`From ${accountCount} bank account${accountCount === 1 ? "" : "s"}`} />
+          <Stat
+            name="Today's balance"
+            date={balanceAsOf ? `as of ${fmtShortDate(balanceAsOf)}` : undefined}
+            value={fmtMoney(result.startingCash)}
+            sub={`From ${accountCount} bank account${accountCount === 1 ? "" : "s"}`}
+          />
           <Stat
             name="Cash-out (below $0)"
             value={cashOut ? fmtDuration(cashOut.days, view === "week" ? "days" : "months") : "—"}
