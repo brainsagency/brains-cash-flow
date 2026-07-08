@@ -176,12 +176,18 @@ function Settings() {
   );
 }
 
+// Categories managed in their own dedicated tabs — hidden here to declutter.
+const ELSEWHERE = new Set(["operatingExpense", "otherWithdrawals"]);
+
 function ItemList({ kind }: { kind: "recurring" | "events" }) {
   const { input, setInput } = useStore();
-  const items = (kind === "recurring" ? input.recurring : input.events) ?? [];
+  const all = (kind === "recurring" ? input.recurring : input.events) ?? [];
+  const hidden = all.filter((it) => ELSEWHERE.has(it.category));
+  const items = all.filter((it) => !ELSEWHERE.has(it.category));
 
-  const write = (next: (RecurringItem | CashEvent)[]) =>
-    setInput((prev) => ({ ...prev, [kind]: next }) as ForecastInput);
+  // Preserve items owned by other tabs (opex, other withdrawals) on every write.
+  const write = (nextVisible: (RecurringItem | CashEvent)[]) =>
+    setInput((prev) => ({ ...prev, [kind]: [...hidden, ...nextVisible] }) as ForecastInput);
 
   const update = (i: number, p: Record<string, unknown>) =>
     write(items.map((it, idx) => (idx === i ? { ...it, ...p } : it)));
@@ -190,12 +196,12 @@ function ItemList({ kind }: { kind: "recurring" | "events" }) {
     write([
       ...items,
       kind === "recurring"
-        ? ({ category: "operatingExpense", amount: 0, frequency: "monthly", startDate: input.anchorDate } as RecurringItem)
+        ? ({ category: "payroll", amount: 0, frequency: "monthly", startDate: input.anchorDate } as RecurringItem)
         : ({ category: "currentAR", amount: 0, date: input.anchorDate } as CashEvent),
     ]);
 
   return (
-    <Group title={kind === "recurring" ? "Recurring items" : "One-off events (AR / AP / withdrawals)"}>
+    <Group title={kind === "recurring" ? "Recurring items (payroll, AmEx…)" : "One-off events"}>
       {items.map((it, i) => (
         <div className="item-grid" key={i}>
           <div className="field">

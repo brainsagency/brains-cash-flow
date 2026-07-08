@@ -13,6 +13,7 @@ import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { SyncedLedger } from "@/components/SyncedLedger.js";
+import { OperatingExpenses } from "@/components/OperatingExpenses.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
@@ -201,6 +202,8 @@ export default function Dashboard() {
             <OtherWithdrawals />
           </div>
         )}
+
+        {nav === "opex" && <OperatingExpenses />}
 
         {nav === "scenarios" && (
           <ScenarioPanel

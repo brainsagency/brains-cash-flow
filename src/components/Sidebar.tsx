@@ -6,6 +6,7 @@ export type ViewKey =
   | "cashflow"
   | "invoices"
   | "bills"
+  | "opex"
   | "scenarios"
   | "insights"
   | "assumptions";
@@ -14,6 +15,7 @@ export const NAV: Array<{ key: ViewKey; label: string; title: string; icon: Reac
   { key: "cashflow", label: "Cash Flow", title: "Cash Flow", icon: <IconChart /> },
   { key: "invoices", label: "Invoices Due (AR)", title: "Invoices Due (AR)", icon: <IconInvoice /> },
   { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", icon: <IconBill /> },
+  { key: "opex", label: "Operating Expenses", title: "Operating Expenses", icon: <IconRepeat /> },
   { key: "scenarios", label: "Scenarios", title: "Scenario planning", icon: <IconLayers /> },
   { key: "insights", label: "Insights", title: "Insights", icon: <IconPie /> },
   { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", icon: <IconGear /> },
@@ -81,6 +83,16 @@ function IconBill() {
     <>
       <path d="M4 3h16v18l-3-2-3 2-3-2-3 2z" />
       <path d="M8 8h8M8 12h5" />
+    </>,
+  );
+}
+function IconRepeat() {
+  return svg(
+    <>
+      <path d="M17 2l4 4-4 4" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="M7 22l-4-4 4-4" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </>,
   );
 }
