@@ -9,7 +9,7 @@
  * balances forward → derive burn / reserve / runway → raise alerts.
  */
 
-import { AVG_DAYS_PER_MONTH, daysBetween, monthsBetween, type ISODate } from "./dates.js";
+import { AVG_DAYS_PER_MONTH, daysBetween, isValidISODate, monthsBetween, type ISODate } from "./dates.js";
 import { expandRecurring, pipelineToEvent } from "./events.js";
 import { buildPeriods, periodIndexForDate } from "./periods.js";
 import {
@@ -81,10 +81,15 @@ export function collectEvents(input: ForecastInput, horizonEnd: ISODate): CashEv
     }
   }
 
-  if (input.includePipeline) {
-    for (const deal of input.pipeline ?? []) {
-      events.push(pipelineToEvent(deal));
-    }
+  // A deal counts when it's explicitly enabled; unset deals fall back to the
+  // global pipeline toggle (legacy behavior). This lets the UI flip individual
+  // opportunities on/off independent of the global switch.
+  for (const deal of input.pipeline ?? []) {
+    if (!(deal.enabled ?? input.includePipeline ?? false)) continue;
+    // Skip deals still being edited (incomplete close date) so we never feed a
+    // malformed date to the period math.
+    if (!isValidISODate(deal.expectedCloseDate)) continue;
+    events.push(pipelineToEvent(deal));
   }
 
   return events;

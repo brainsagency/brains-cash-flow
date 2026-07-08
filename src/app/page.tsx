@@ -15,6 +15,7 @@ import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { SyncedLedger } from "@/components/SyncedLedger.js";
 import { OperatingExpenses } from "@/components/OperatingExpenses.js";
 import { StaffRoster } from "@/components/StaffRoster.js";
+import { NewBusiness } from "@/components/NewBusiness.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
@@ -187,6 +188,7 @@ export default function Dashboard() {
               onRange={view === "week" ? setWeekRange : setMonthRange}
             />
             <CashMatrix result={active} view={view} />
+            <NewBusiness />
           </div>
         )}
 

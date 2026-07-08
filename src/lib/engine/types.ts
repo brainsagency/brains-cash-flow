@@ -150,6 +150,13 @@ export interface PipelineDeal {
   expectedCloseDate: ISODate;
   /** Days from close until cash collected (payment terms + collection lag). */
   collectionLagDays: number;
+  /**
+   * Per-deal toggle. `true` counts this deal regardless of the global
+   * `includePipeline`; `false` never counts it. When unset, the deal follows
+   * `includePipeline` (legacy behavior). Lets the UI turn individual
+   * opportunities on/off to play with potential revenue.
+   */
+  enabled?: boolean;
 }
 
 /** A bank account tracked individually and in the total. */
