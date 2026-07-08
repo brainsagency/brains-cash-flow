@@ -4,6 +4,7 @@ import { useState } from "react";
 import { addMonths, isValidISODate, type Billing, type ForecastInput, type PipelineDeal } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
+import { MoneyInput } from "@/components/fields.js";
 
 /**
  * New Business — pipeline opportunities you can toggle on/off to see their
@@ -191,12 +192,7 @@ export function NewBusiness() {
                   style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginBottom: 6 }}
                 >
                   <input type="date" value={b.date} onChange={(e) => updateBilling(i, bi, { date: e.target.value })} />
-                  <input
-                    type="number"
-                    step="1000"
-                    value={b.amount}
-                    onChange={(e) => updateBilling(i, bi, { amount: Number(e.target.value) })}
-                  />
+                  <MoneyInput value={b.amount} step="1000" onChange={(n) => updateBilling(i, bi, { amount: n })} />
                   <button className="btn sm ghost" onClick={() => removeBilling(i, bi)} title="Remove billing">
                     ✕
                   </button>
@@ -210,14 +206,9 @@ export function NewBusiness() {
                 <span className="muted" style={{ margin: "0 4px" }}>
                   or quick-split
                 </span>
-                <input
-                  type="number"
-                  step="1000"
-                  value={draft.total}
-                  onChange={(e) => setDraft(d.id, { total: Number(e.target.value) })}
-                  title="Total value"
-                  style={{ width: 110 }}
-                />
+                <div style={{ width: 120 }}>
+                  <MoneyInput value={draft.total} step="1000" onChange={(n) => setDraft(d.id, { total: n })} title="Total value" />
+                </div>
                 <span className="muted">into</span>
                 <input
                   type="number"

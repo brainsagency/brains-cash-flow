@@ -412,6 +412,14 @@ table.fc td.neg {
   overflow-x: auto;
 }
 
+/* Staff roster edit grid: fixed numeric/date columns, scrolls if too narrow. */
+.staff-edit-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.6fr) 120px 150px 150px 120px auto;
+  gap: 8px;
+  min-width: 620px;
+}
+
 /* Float-style cash matrix */
 table.fc.matrix th,
 table.fc.matrix td {
@@ -551,6 +559,77 @@ table.fc.matrix tr.closing td {
 .field select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Base styling for bare inputs used in the data panels (matches .field). */
+input[type="text"],
+input[type="number"],
+input[type="date"] {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Money input: a leading "$" glued to a right-aligned number field. */
+.money-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 96px; /* keep the grid track from collapsing next to date inputs */
+}
+.money-input .prefix {
+  position: absolute;
+  left: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  pointer-events: none;
+}
+.money-input input {
+  width: 100%;
+  padding-left: 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Read-only "spec" view shown once a panel's rows are entered. */
+.spec-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.spec-row:last-child {
+  border-bottom: none;
+}
+.spec-row .label {
+  color: var(--text);
+}
+.spec-row .meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: 8px;
+}
+.spec-row .val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.spec-row .val .sub {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 6px;
 }
 
 .toggle {
