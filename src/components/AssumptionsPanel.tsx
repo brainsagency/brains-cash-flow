@@ -98,8 +98,9 @@ function Settings({ anchorDate, onPatch }: { anchorDate: string; onPatch: (p: Pa
         </div>
       </div>
       <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-        Collection lag shifts every synced invoice this many days past its due date — clients rarely pay on time.
-        Per-invoice date overrides (set on the Invoices tab) still win. 0 = assume paid on the due date.
+        Collection lag shifts not-yet-due invoices this many days past their due date — clients rarely pay on time.
+        Already-overdue invoices are assumed collected this week (not delayed further). Per-invoice date overrides
+        (set on the Invoices tab) still win. 0 = assume paid on the due date.
       </div>
     </Group>
   );

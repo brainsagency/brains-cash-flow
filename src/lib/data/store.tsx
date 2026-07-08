@@ -347,7 +347,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (adj.excluded) return [];
         const override = adj.date ?? adj.payDate; // payDate = legacy AP field
         if (override) return [{ ...e, date: clampToAnchor(override) }];
-        if (lagDays > 0) return [{ ...e, date: clampToAnchor(addDays(e.date, lagDays)) }];
+        // Lag applies only to not-yet-due invoices (currentAR). Overdue AR is
+        // already swept to the anchor (current week) by the sync — it's late,
+        // so we assume it lands now, not N days further out.
+        if (lagDays > 0 && e.category === "currentAR") {
+          return [{ ...e, date: clampToAnchor(addDays(e.date, lagDays)) }];
+        }
         return [e];
       });
 
