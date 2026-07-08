@@ -3,14 +3,14 @@ import { forecast } from "../forecast.js";
 import { staffToPayroll, type StaffMember } from "./staff.js";
 
 describe("staffToPayroll", () => {
-  it("emits one monthly item for a plain salaried employee", () => {
+  it("emits one semi-monthly item for a plain salaried employee", () => {
     const items = staffToPayroll([
       { id: "1", name: "Sarah Bowman", annualSalary: 90_070.7, doh: "2022-05-24" },
     ]);
     expect(items).toHaveLength(1);
     expect(items[0]!.category).toBe("payroll");
-    expect(items[0]!.frequency).toBe("monthly");
-    expect(items[0]!.amount).toBeCloseTo(90_070.7 / 12, 2);
+    expect(items[0]!.frequency).toBe("semimonthly");
+    expect(items[0]!.amount).toBeCloseTo(90_070.7 / 24, 2); // per pay run (1st & 15th)
     expect(items[0]!.basis).toBe("budgeted"); // default: a plan, not owed cash
   });
 
@@ -28,9 +28,9 @@ describe("staffToPayroll", () => {
     const items = staffToPayroll(staff);
     expect(items).toHaveLength(2);
     const [pre, post] = items;
-    expect(pre!.amount).toBeCloseTo(115_000 / 12, 2);
+    expect(pre!.amount).toBeCloseTo(115_000 / 24, 2);
     expect(pre!.endDate).toBe("2026-09-30"); // day before the raise
-    expect(post!.amount).toBeCloseTo(118_450 / 12, 2);
+    expect(post!.amount).toBeCloseTo(118_450 / 24, 2);
     expect(post!.startDate).toBe("2026-10-01");
     expect(post!.endDate).toBeUndefined();
   });
@@ -63,7 +63,7 @@ describe("staffToPayroll", () => {
       [{ id: "1", name: "X", annualSalary: 120_000, doh: "2020-01-01" }],
       { loadFactor: 1.15 },
     );
-    expect(items[0]!.amount).toBeCloseTo((120_000 * 1.15) / 12, 2);
+    expect(items[0]!.amount).toBeCloseTo((120_000 * 1.15) / 24, 2);
   });
 
   it("lets active staff be marked committed while future hires stay budgeted", () => {

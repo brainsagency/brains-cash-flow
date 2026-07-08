@@ -37,8 +37,9 @@ export interface StaffToPayrollOptions {
  *
  * A member with a scheduled raise produces two items: the old salary from DOH
  * until the day before the change, and the new salary from the change date.
- * Termination (DOT) caps the end date. Monthly frequency matches the model's
- * per-month spread (weekly detail comes from the payroll-provider sync later).
+ * Termination (DOT) caps the end date. Payroll runs semi-monthly — the 1st
+ * and 15th of each month — so each item pays annual/24 per run (weekly detail
+ * comes from the payroll-provider sync later).
  */
 export function staffToPayroll(
   staff: StaffMember[],
@@ -50,7 +51,8 @@ export function staffToPayroll(
 
   for (const m of staff) {
     const basis = options.basisFor ? options.basisFor(m) : defaultBasis;
-    const monthly = (annual: number) => (annual * load) / 12;
+    // Semi-monthly payroll: 24 pay runs a year, so each run is annual/24.
+    const perRun = (annual: number) => (annual * load) / 24;
 
     const hasRaise =
       m.salaryChangeDate !== undefined &&
@@ -62,19 +64,19 @@ export function staffToPayroll(
       const salary = m.newSalary !== undefined && m.salaryChangeDate !== undefined && m.salaryChangeDate <= m.doh
         ? m.newSalary
         : m.annualSalary;
-      items.push(payrollItem(m, monthly(salary), m.doh, m.dot, basis, "salary"));
+      items.push(payrollItem(m, perRun(salary), m.doh, m.dot, basis, "salary"));
       continue;
     }
 
     // Old salary DOH → day before the raise; new salary from the raise date.
     const dayBeforeRaise = addDays(m.salaryChangeDate!, -1);
     const oldEnd = m.dot && m.dot < dayBeforeRaise ? m.dot : dayBeforeRaise;
-    items.push(payrollItem(m, monthly(m.annualSalary), m.doh, oldEnd, basis, "salary (pre-raise)"));
+    items.push(payrollItem(m, perRun(m.annualSalary), m.doh, oldEnd, basis, "salary (pre-raise)"));
 
     // Skip the new item entirely if termination precedes the raise.
     if (!m.dot || m.dot >= m.salaryChangeDate!) {
       items.push(
-        payrollItem(m, monthly(m.newSalary!), m.salaryChangeDate!, m.dot, basis, "salary (post-raise)"),
+        payrollItem(m, perRun(m.newSalary!), m.salaryChangeDate!, m.dot, basis, "salary (post-raise)"),
       );
     }
   }
@@ -94,7 +96,7 @@ function payrollItem(
     id: `staff:${m.id}:${note}`,
     category: "payroll",
     amount,
-    frequency: "monthly",
+    frequency: "semimonthly",
     startDate,
     ...(endDate !== undefined ? { endDate } : {}),
     basis,
