@@ -85,8 +85,10 @@ export interface LayoffGroupLever {
   kind: "layoffGroup";
   staffIds: string[];
   effectiveDate: ISODate;
-  /** Months of pay as severance per person (0 / undefined = none). */
+  /** Default months of pay as severance, applied per person unless overridden. */
   severanceMonths?: number;
+  /** Per-person severance override (months of pay), keyed by staff id. */
+  severanceByStaff?: Record<string, number>;
   label?: string;
 }
 
@@ -230,11 +232,12 @@ function monthlyEquiv(item: RecurringItem): number {
 
 function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
   const cutoff = addDays(lever.effectiveDate, -1);
-  const months = lever.severanceMonths ?? 0;
   const covers = (item: RecurringItem) =>
     item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
 
   for (const id of lever.staffIds) {
+    // Per-person severance months, falling back to the group default.
+    const months = lever.severanceByStaff?.[id] ?? lever.severanceMonths ?? 0;
     const prefix = `staff:${id}:`;
     let monthlyAtLayoff = 0;
     for (const item of input.recurring!) {

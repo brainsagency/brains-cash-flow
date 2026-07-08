@@ -18,6 +18,8 @@ interface Props {
   initial: Scenario | null;
   staff: StaffMember[];
   anchor: string;
+  /** Employer load factor, for accurate severance $ previews. */
+  loadFactor: number;
   onSave: (s: Scenario) => void;
   onClose: () => void;
   onDelete?: () => void;
@@ -39,7 +41,7 @@ function defaultLever(kind: LeverKind, anchor: string): Lever {
   }
 }
 
-export function ScenarioBuilder({ initial, staff, anchor, onSave, onClose, onDelete }: Props) {
+export function ScenarioBuilder({ initial, staff, anchor, loadFactor, onSave, onClose, onDelete }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [levers, setLevers] = useState<Lever[]>(initial?.levers ?? []);
 
@@ -75,7 +77,7 @@ export function ScenarioBuilder({ initial, staff, anchor, onSave, onClose, onDel
               <div className="spacer" />
               <button className="btn sm ghost" onClick={() => removeLever(i)} title="Remove lever">✕</button>
             </div>
-            <LeverEditor lever={l} staff={staff} onChange={(patch) => setLever(i, patch)} />
+            <LeverEditor lever={l} staff={staff} loadFactor={loadFactor} onChange={(patch) => setLever(i, patch)} />
           </div>
         ))}
 
@@ -111,45 +113,80 @@ function leverTitle(kind: LeverKind): string {
   }
 }
 
-function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMember[]; onChange: (patch: Partial<Lever>) => void }) {
+function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; staff: StaffMember[]; loadFactor: number; onChange: (patch: Partial<Lever>) => void }) {
   if (lever.kind === "layoffGroup") {
     const selected = new Set(lever.staffIds);
+    const byStaff = lever.severanceByStaff ?? {};
+    const defaultMonths = lever.severanceMonths ?? 0;
+    const monthsFor = (id: string) => byStaff[id] ?? defaultMonths;
+    // Loaded monthly pay for a person, for the severance $ preview.
+    const monthlyPay = (m: StaffMember) => (m.annualSalary * loadFactor) / 12;
+
     const toggle = (id: string) => {
       const next = new Set(selected);
-      next.has(id) ? next.delete(id) : next.add(id);
-      onChange({ staffIds: [...next] } as Partial<Lever>);
+      const nextBy = { ...byStaff };
+      if (next.has(id)) { next.delete(id); delete nextBy[id]; }
+      else next.add(id);
+      onChange({ staffIds: [...next], severanceByStaff: nextBy } as Partial<Lever>);
     };
-    const selAnnual = staff.filter((m) => selected.has(m.id)).reduce((s, m) => s + m.annualSalary, 0);
+    const setPersonMonths = (id: string, months: number) =>
+      onChange({ severanceByStaff: { ...byStaff, [id]: months } } as Partial<Lever>);
+
+    const selStaff = staff.filter((m) => selected.has(m.id));
+    const selAnnual = selStaff.reduce((s, m) => s + m.annualSalary, 0);
+    const totalSeverance = selStaff.reduce((s, m) => s + monthlyPay(m) * monthsFor(m.id), 0);
+
     return (
       <>
-        <div className="muted" style={{ marginBottom: 6, fontSize: 12 }}>
-          Pick who&apos;s affected — {selected.size} selected · {fmtMoney(selAnnual)}/yr
-        </div>
-        <div className="staff-pick" style={{ marginBottom: 10 }}>
-          {staff.length === 0 && <div className="muted" style={{ padding: 6 }}>No roster yet — add staff first.</div>}
-          {staff.map((m) => (
-            <label key={m.id}>
-              <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggle(m.id)} />
-              <span>{m.name || "Unnamed"}</span>
-              <span className="sal">{fmtMoney(m.annualSalary)}</span>
-            </label>
-          ))}
-        </div>
-        <div className="row" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 12, marginBottom: 10 }}>
           <div className="field" style={{ maxWidth: 180 }}>
             <label>Effective date</label>
             <input type="date" value={lever.effectiveDate} onChange={(e) => onChange({ effectiveDate: e.target.value } as Partial<Lever>)} />
           </div>
-          <div className="field" style={{ maxWidth: 160 }}>
-            <label>Severance (months of pay)</label>
+          <div className="field" style={{ maxWidth: 170 }}>
+            <label>Default severance (months)</label>
             <input
               type="number"
               min={0}
               step={0.5}
-              value={lever.severanceMonths ?? 0}
+              value={defaultMonths}
               onChange={(e) => onChange({ severanceMonths: Number(e.target.value) } as Partial<Lever>)}
             />
           </div>
+        </div>
+        <div className="muted" style={{ marginBottom: 6, fontSize: 12 }}>
+          Pick who&apos;s affected — {selected.size} selected · {fmtMoney(selAnnual)}/yr
+          {selected.size > 0 && <> · severance {fmtMoney(totalSeverance)}</>}
+        </div>
+        <div className="staff-pick">
+          {staff.length === 0 && <div className="muted" style={{ padding: 6 }}>No roster yet — add staff first.</div>}
+          {staff.map((m) => {
+            const on = selected.has(m.id);
+            return (
+              <div className="prow" key={m.id}>
+                <label>
+                  <input type="checkbox" checked={on} onChange={() => toggle(m.id)} />
+                  <span>{m.name || "Unnamed"}</span>
+                </label>
+                {on ? (
+                  <span className="sal" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={monthsFor(m.id)}
+                      onChange={(e) => setPersonMonths(m.id, Number(e.target.value))}
+                      style={{ width: 56, padding: "3px 5px" }}
+                      title="Severance months for this person"
+                    />
+                    <span style={{ fontSize: 12 }}>mo ≈ {fmtMoney(monthlyPay(m) * monthsFor(m.id))}</span>
+                  </span>
+                ) : (
+                  <span className="sal">{fmtMoney(m.annualSalary)}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </>
     );

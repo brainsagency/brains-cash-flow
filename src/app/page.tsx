@@ -252,6 +252,7 @@ export default function Dashboard() {
             initial={builder === "new" ? null : builder}
             staff={input.staff ?? []}
             anchor={input.anchorDate}
+            loadFactor={input.staffLoadFactor ?? 1}
             onSave={saveScenario}
             onClose={() => setBuilder(null)}
             onDelete={builder !== "new" ? () => deleteScenario(builder.id) : undefined}

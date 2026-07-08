@@ -916,19 +916,26 @@ input.cell-date:disabled {
   padding: 6px;
   background: var(--bg-elev);
 }
-.staff-pick label {
+.staff-pick .prow {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 5px 6px;
   border-radius: 6px;
   font-size: 13px;
-  cursor: pointer;
 }
-.staff-pick label:hover {
+.staff-pick .prow:hover {
   background: var(--bg-elev-2);
 }
-.staff-pick label .sal {
+.staff-pick .prow > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.staff-pick .prow .sal {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);

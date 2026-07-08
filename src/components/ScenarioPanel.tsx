@@ -133,8 +133,10 @@ function leverLabel(l: Lever): string {
       return `+ Hire ${l.role}`;
     case "layoff":
       return `– Layoff ${l.role}`;
-    case "layoffGroup":
-      return `– Lay off ${l.staffIds.length}${l.severanceMonths ? ` (+${l.severanceMonths}mo sev)` : ""}`;
+    case "layoffGroup": {
+      const hasSev = (l.severanceMonths ?? 0) > 0 || Object.keys(l.severanceByStaff ?? {}).length > 0;
+      return `– Lay off ${l.staffIds.length}${hasSev ? " (+sev)" : ""}`;
+    }
     case "addRevenue":
       return `+ Revenue ${fmtMoney(l.amount)}${l.mode === "recurring" ? "/mo" : ""}`;
     case "churn":
