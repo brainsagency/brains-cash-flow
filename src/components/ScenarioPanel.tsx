@@ -17,22 +17,32 @@ interface Props {
   base: ForecastResult;
   /** Selected scenario results, aligned with selectedIds. */
   views: ScenarioView[];
+  onCreate: () => void;
+  onEdit: (s: Scenario) => void;
 }
 
-export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base, views }: Props) {
+export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base, views, onCreate, onEdit }: Props) {
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Scenarios</h2>
-        <span className="muted">toggle any on the chart to compare</span>
+        <span className="muted" style={{ marginLeft: 8 }}>toggle any on the chart to compare</span>
+        <div className="spacer" />
+        <button className="btn sm primary" onClick={onCreate}>+ New scenario</button>
       </div>
+
+      {scenarios.length === 0 && (
+        <div className="muted" style={{ marginBottom: 4 }}>
+          No scenarios yet — create one to model layoffs, new revenue, hires, or a combo.
+        </div>
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
         {scenarios.map((s) => {
           const active = selectedIds.includes(s.id);
           const color = colorFor(s.id);
           return (
-            <button
+            <div
               key={s.id}
               onClick={() => onToggle(s.id)}
               className="card"
@@ -40,21 +50,31 @@ export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base
                 textAlign: "left",
                 cursor: "pointer",
                 borderColor: active ? color : "var(--border)",
-                background: active ? "var(--bg-elev-2)" : "var(--bg-elev-2)",
+                background: "var(--bg-elev-2)",
                 borderWidth: active ? 2 : 1,
               }}
             >
               <div className="row" style={{ gap: 8, marginBottom: 4 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: active ? color : "var(--border-strong)", display: "inline-block" }} />
                 <span style={{ fontWeight: 650 }}>{s.name}</span>
+                <div className="spacer" />
+                <button
+                  className="btn sm ghost"
+                  style={{ fontSize: 12 }}
+                  onClick={(e) => { e.stopPropagation(); onEdit(s); }}
+                  title="Edit scenario"
+                >
+                  Edit
+                </button>
               </div>
               {s.description && <div className="muted" style={{ marginBottom: 8 }}>{s.description}</div>}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {s.levers.length === 0 && <span className="muted" style={{ fontSize: 12 }}>No levers</span>}
                 {s.levers.map((l, i) => (
                   <span key={i} className="chip">{leverLabel(l)}</span>
                 ))}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -113,6 +133,10 @@ function leverLabel(l: Lever): string {
       return `+ Hire ${l.role}`;
     case "layoff":
       return `– Layoff ${l.role}`;
+    case "layoffGroup":
+      return `– Lay off ${l.staffIds.length}${l.severanceMonths ? ` (+${l.severanceMonths}mo sev)` : ""}`;
+    case "addRevenue":
+      return `+ Revenue ${fmtMoney(l.amount)}${l.mode === "recurring" ? "/mo" : ""}`;
     case "churn":
       return `– Churn ${l.client}`;
     case "pipelineSensitivity":

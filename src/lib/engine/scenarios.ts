@@ -75,9 +75,39 @@ export interface CollectionTimingLever {
   overdueShiftDays: number;
 }
 
+/**
+ * Lay off a group of real roster people from `effectiveDate`. Each person's
+ * expanded payroll (items id-prefixed `staff:<id>:`) is truncated at the date,
+ * and severance = `severanceMonths` × their monthly pay lands on that date.
+ * Operates on the already-expanded input, so it tracks current salaries.
+ */
+export interface LayoffGroupLever {
+  kind: "layoffGroup";
+  staffIds: string[];
+  effectiveDate: ISODate;
+  /** Months of pay as severance per person (0 / undefined = none). */
+  severanceMonths?: number;
+  label?: string;
+}
+
+/** Add revenue — a one-off lump on a date, or a recurring monthly amount. */
+export interface AddRevenueLever {
+  kind: "addRevenue";
+  mode: "oneoff" | "recurring";
+  amount: number;
+  /** One-off receipt date. */
+  date?: ISODate;
+  /** Recurring start / optional end. */
+  startDate?: ISODate;
+  endDate?: ISODate;
+  label?: string;
+}
+
 export type Lever =
   | HireLever
   | LayoffLever
+  | LayoffGroupLever
+  | AddRevenueLever
   | ChurnLever
   | PipelineSensitivityLever
   | CollectionTimingLever;
@@ -114,6 +144,12 @@ export function applyLever(input: ForecastInput, lever: Lever): ForecastInput {
       break;
     case "layoff":
       applyLayoff(next, lever);
+      break;
+    case "layoffGroup":
+      applyLayoffGroup(next, lever);
+      break;
+    case "addRevenue":
+      applyAddRevenue(next, lever);
       break;
     case "churn":
       applyChurn(next, lever);
@@ -174,6 +210,63 @@ function applyLayoff(input: ForecastInput, lever: LayoffLever): void {
       amount: lever.severance,
       date: lever.effectiveDate,
       memo: `Severance: ${lever.role}`,
+    });
+  }
+}
+
+/** Monthly-equivalent amount of a recurring item. */
+function monthlyEquiv(item: RecurringItem): number {
+  switch (item.frequency) {
+    case "weekly":
+      return (item.amount * 52) / 12;
+    case "biweekly":
+      return (item.amount * 26) / 12;
+    case "semimonthly":
+      return item.amount * 2;
+    case "monthly":
+      return item.amount;
+  }
+}
+
+function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
+  const cutoff = addDays(lever.effectiveDate, -1);
+  const months = lever.severanceMonths ?? 0;
+  const covers = (item: RecurringItem) =>
+    item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
+
+  for (const id of lever.staffIds) {
+    const prefix = `staff:${id}:`;
+    let monthlyAtLayoff = 0;
+    for (const item of input.recurring!) {
+      if (!item.id || !item.id.startsWith(prefix)) continue;
+      if (covers(item)) monthlyAtLayoff += monthlyEquiv(item);
+      // Stop the pay at the layoff date (never extend an earlier end).
+      item.endDate = item.endDate && item.endDate < cutoff ? item.endDate : cutoff;
+    }
+    if (months > 0 && monthlyAtLayoff > 0) {
+      input.events!.push({
+        id: `layoff-sev:${id}`,
+        category: "payroll",
+        amount: monthlyAtLayoff * months,
+        date: lever.effectiveDate,
+        memo: `Severance (${months}mo)`,
+      });
+    }
+  }
+}
+
+function applyAddRevenue(input: ForecastInput, lever: AddRevenueLever): void {
+  const memo = lever.label || "Added revenue";
+  if (lever.mode === "oneoff" && lever.date) {
+    input.events!.push({ category: "pipeline", amount: lever.amount, date: lever.date, memo });
+  } else if (lever.mode === "recurring" && lever.startDate) {
+    input.recurring!.push({
+      category: "pipeline",
+      amount: lever.amount,
+      frequency: "monthly",
+      startDate: lever.startDate,
+      ...(lever.endDate ? { endDate: lever.endDate } : {}),
+      memo,
     });
   }
 }

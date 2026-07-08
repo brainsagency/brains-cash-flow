@@ -85,6 +85,47 @@ describe("scenario levers", () => {
     expect(finalEnding(result)).toBeGreaterThan(finalEnding(baseline));
   });
 
+  it("layoffGroup stops roster pay and adds months-of-pay severance", () => {
+    // Two roster people, expanded to semi-monthly payroll (annual/24 per run).
+    const rosterBase: ForecastInput = {
+      anchorDate: ANCHOR,
+      bankAccounts: [{ id: "op", name: "Op", beginningBalance: 500_000 }],
+      recurring: [
+        { id: "staff:s1:salary", category: "payroll", amount: 5_000, frequency: "semimonthly", startDate: ANCHOR },
+        { id: "staff:s2:salary", category: "payroll", amount: 4_000, frequency: "semimonthly", startDate: ANCHOR },
+      ],
+    };
+    const kept = forecast(rosterBase);
+    const laid = runScenario(rosterBase, {
+      id: "rif",
+      name: "RIF",
+      levers: [{ kind: "layoffGroup", staffIds: ["s1"], effectiveDate: "2026-10-01", severanceMonths: 2 }],
+    });
+    // Ends higher (pay stopped for s1) despite a 2-month severance one-off.
+    expect(finalEnding(laid)).toBeGreaterThan(finalEnding(kept));
+    // Severance = 2 months of s1's monthly pay (5,000 * 2 per month * 2 months).
+    const sev = laid.periods.find((p) => p.period.start <= "2026-10-01" && p.period.end >= "2026-10-01");
+    expect(sev).toBeTruthy();
+  });
+
+  it("addRevenue (one-off) raises ending cash by the amount", () => {
+    const withRev = runScenario(base(), {
+      id: "rev",
+      name: "New logo",
+      levers: [{ kind: "addRevenue", mode: "oneoff", amount: 100_000, date: "2026-08-15", label: "New logo" }],
+    });
+    expect(finalEnding(withRev)).toBeCloseTo(finalEnding(baseline) + 100_000, 5);
+  });
+
+  it("addRevenue (recurring) adds monthly receipts over the horizon", () => {
+    const withRev = runScenario(base(), {
+      id: "rev",
+      name: "New retainer",
+      levers: [{ kind: "addRevenue", mode: "recurring", amount: 25_000, startDate: "2026-08-01" }],
+    });
+    expect(finalEnding(withRev)).toBeGreaterThan(finalEnding(baseline) + 25_000);
+  });
+
   it("churn by recurring id truncates the retainer", () => {
     const result = runScenario(base(), {
       id: "s",

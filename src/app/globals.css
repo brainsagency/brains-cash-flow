@@ -875,6 +875,64 @@ input.cell-date:disabled {
   inset: 0;
   z-index: 30;
 }
+
+/* Centered modal (scenario builder). */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(16, 24, 40, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow-y: auto;
+}
+.modal {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+}
+.modal h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.lever-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--bg-elev-2);
+}
+.staff-pick {
+  max-height: 190px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--bg-elev);
+}
+.staff-pick label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.staff-pick label:hover {
+  background: var(--bg-elev-2);
+}
+.staff-pick label .sal {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
 .popover {
   position: absolute;
   top: 100%;

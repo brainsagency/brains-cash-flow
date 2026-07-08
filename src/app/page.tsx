@@ -21,6 +21,9 @@ import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
+import { ScenarioBuilder } from "@/components/ScenarioBuilder.js";
+import { ScenarioMenu } from "@/components/ScenarioMenu.js";
+import type { Scenario } from "@engine/index.js";
 
 const WEEK_RANGES: RangeOption[] = [
   { value: 13, label: "13w" },
@@ -58,9 +61,21 @@ function staleFeeds(qbo: string | null, bill: string | null): Array<{ name: stri
 }
 
 export default function Dashboard() {
-  const { input, scenarios, prefs, setPrefs, qboSyncedAt, billSyncedAt } = useStore();
+  const { input, scenarios, prefs, setPrefs, setScenarios, qboSyncedAt, billSyncedAt } = useStore();
   const [nav, setNav] = useState<ViewKey>("cashflow");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Scenario builder: null = closed, "new" = create, Scenario = edit.
+  const [builder, setBuilder] = useState<Scenario | "new" | null>(null);
+
+  const saveScenario = (s: Scenario) => {
+    setScenarios((prev) => (prev.some((x) => x.id === s.id) ? prev.map((x) => (x.id === s.id ? s : x)) : [...prev, s]));
+    setBuilder(null);
+  };
+  const deleteScenario = (id: string) => {
+    setScenarios((prev) => prev.filter((x) => x.id !== id));
+    setSelectedIds((prev) => prev.filter((x) => x !== id));
+    setBuilder(null);
+  };
   const { view, weekRange, monthRange } = prefs;
   const setView = (v: "week" | "month") => setPrefs({ view: v });
   const setWeekRange = (n: number) => setPrefs({ weekRange: n });
@@ -178,6 +193,15 @@ export default function Dashboard() {
 
         {nav === "cashflow" && (
           <div className="grid" style={{ gap: 16 }}>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <ScenarioMenu
+                scenarios={scenarios}
+                selectedIds={selectedIds}
+                colorFor={colorFor}
+                onToggle={toggle}
+                onCreate={() => setBuilder("new")}
+              />
+            </div>
             <CashFlowCard
               view={view}
               onView={setView}
@@ -218,6 +242,19 @@ export default function Dashboard() {
             onToggle={toggle}
             base={base}
             views={views}
+            onCreate={() => setBuilder("new")}
+            onEdit={(s) => setBuilder(s)}
+          />
+        )}
+
+        {builder && (
+          <ScenarioBuilder
+            initial={builder === "new" ? null : builder}
+            staff={input.staff ?? []}
+            anchor={input.anchorDate}
+            onSave={saveScenario}
+            onClose={() => setBuilder(null)}
+            onDelete={builder !== "new" ? () => deleteScenario(builder.id) : undefined}
           />
         )}
 
