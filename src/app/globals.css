@@ -580,24 +580,36 @@ input[type="month"]:focus {
   border-color: var(--accent);
 }
 
-/* Per-month actuals editor inside an expense row. */
-.actuals-panel {
-  margin: 2px 0 12px 0;
-  padding: 10px 12px;
+/* Dedicated variable-expense (AmEx) section with a month-by-month actuals grid. */
+.amex-section {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 20px;
   background: var(--bg-elev-2);
-  border-radius: 8px;
 }
-.actuals-panel .head {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 8px;
-}
-.actuals-row {
+.amex-grid {
   display: grid;
-  grid-template-columns: 150px 130px auto;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.amex-month {
+  display: grid;
+  grid-template-columns: 58px 1fr;
   gap: 8px;
   align-items: center;
-  margin-bottom: 6px;
+}
+.amex-month .m {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.amex-month.actual .prefix {
+  color: var(--accent);
+}
+.amex-month.actual input {
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 /* Money input: a leading "$" glued to a right-aligned number field. */
