@@ -87,6 +87,19 @@ function Settings({ anchorDate, onPatch }: { anchorDate: string; onPatch: (p: Pa
           <label>Runway alert (months)</label>
           <input type="number" value={s.runwayAlertMonths} onChange={(e) => set({ runwayAlertMonths: Number(e.target.value) })} />
         </div>
+        <div className="field" style={{ width: 190 }}>
+          <label>AR collection lag (days)</label>
+          <input
+            type="number"
+            min={0}
+            value={input.arCollectionLagDays ?? 0}
+            onChange={(e) => onPatch({ arCollectionLagDays: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })}
+          />
+        </div>
+      </div>
+      <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+        Collection lag shifts every synced invoice this many days past its due date — clients rarely pay on time.
+        Per-invoice date overrides (set on the Invoices tab) still win. 0 = assume paid on the due date.
       </div>
     </Group>
   );

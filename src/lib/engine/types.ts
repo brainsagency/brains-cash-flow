@@ -291,6 +291,12 @@ export interface ForecastInput {
   staff?: StaffMember[];
   /** Multiply gross salary → loaded payroll cash (taxes/benefits). Defaults to 1. */
   staffLoadFactor?: number;
+  /**
+   * Collection-timing assumption: shift every synced AR receipt this many days
+   * past its due date, reflecting that clients rarely pay on the due date.
+   * Per-invoice date overrides win over this global lag. Defaults to 0.
+   */
+  arCollectionLagDays?: number;
   /** CRM deals; only counted when `includePipeline` is true. */
   pipeline?: PipelineDeal[];
   /** Toggle for pipeline revenue (matches the sheet's pipeline toggle). */

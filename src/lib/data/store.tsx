@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  addDays,
   isValidISODate,
   staffToPayroll,
   type CashEvent,
@@ -335,12 +336,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
 
     const anchor = staffBase.anchorDate;
-    const applyAdjustments = (list: CashEvent[]) =>
+    const clampToAnchor = (d: string) => (d < anchor ? anchor : d);
+    // AR collection lag: shift receipts past their due date (clients rarely pay
+    // on time). Applied only to AR, and only when the invoice has no explicit
+    // date override.
+    const arLag = Math.max(0, Math.round(staffBase.arCollectionLagDays ?? 0));
+    const applyAdjustments = (list: CashEvent[], lagDays: number) =>
       list.flatMap((e) => {
         const adj = state.adjustments[e.id ?? ""] ?? {};
         if (adj.excluded) return [];
         const override = adj.date ?? adj.payDate; // payDate = legacy AP field
-        if (override) return [{ ...e, date: override < anchor ? anchor : override }];
+        if (override) return [{ ...e, date: clampToAnchor(override) }];
+        if (lagDays > 0) return [{ ...e, date: clampToAnchor(addDays(e.date, lagDays)) }];
         return [e];
       });
 
@@ -348,8 +355,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...staffBase,
       events: [
         ...events,
-        ...applyAdjustments(hasAr ? syncedAr : []),
-        ...applyAdjustments(hasAp ? syncedAp : []),
+        ...applyAdjustments(hasAr ? syncedAr : [], arLag),
+        ...applyAdjustments(hasAp ? syncedAp : [], 0),
       ],
     };
   }, [staffBase, state.adjustments, syncedAr, syncedAp]);
