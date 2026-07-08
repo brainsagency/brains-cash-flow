@@ -59,10 +59,14 @@ function advance(date: ISODate, freq: RecurringItem["frequency"]): ISODate {
 }
 
 function makeEvent(item: RecurringItem, date: ISODate): CashEvent {
+  // A monthly item can carry a per-month actual override (keyed "YYYY-MM")
+  // that supersedes the budget amount for that month.
+  const month = date.slice(0, 7);
+  const override = item.frequency === "monthly" ? item.overrides?.[month] : undefined;
   return {
     ...(item.id !== undefined ? { id: item.id } : {}),
     category: item.category,
-    amount: item.amount,
+    amount: override ?? item.amount,
     date,
     ...(item.memo !== undefined ? { memo: item.memo } : {}),
   };

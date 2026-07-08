@@ -177,7 +177,7 @@ function Settings() {
 }
 
 // Categories managed in their own dedicated tabs — hidden here to declutter.
-const ELSEWHERE = new Set(["operatingExpense", "otherWithdrawals"]);
+const ELSEWHERE = new Set(["operatingExpense", "amex", "otherWithdrawals"]);
 
 function ItemList({ kind }: { kind: "recurring" | "events" }) {
   const { input, setInput } = useStore();
@@ -201,7 +201,7 @@ function ItemList({ kind }: { kind: "recurring" | "events" }) {
     ]);
 
   return (
-    <Group title={kind === "recurring" ? "Recurring items (payroll, AmEx…)" : "One-off events"}>
+    <Group title={kind === "recurring" ? "Recurring items" : "One-off events"}>
       {items.map((it, i) => (
         <div className="item-grid" key={i}>
           <div className="field">

@@ -564,7 +564,8 @@ table.fc.matrix tr.closing td {
 /* Base styling for bare inputs used in the data panels (matches .field). */
 input[type="text"],
 input[type="number"],
-input[type="date"] {
+input[type="date"],
+input[type="month"] {
   background: var(--bg-elev);
   border: 1px solid var(--border-strong);
   color: var(--text);
@@ -573,9 +574,30 @@ input[type="date"] {
 }
 input[type="text"]:focus,
 input[type="number"]:focus,
-input[type="date"]:focus {
+input[type="date"]:focus,
+input[type="month"]:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Per-month actuals editor inside an expense row. */
+.actuals-panel {
+  margin: 2px 0 12px 0;
+  padding: 10px 12px;
+  background: var(--bg-elev-2);
+  border-radius: 8px;
+}
+.actuals-panel .head {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.actuals-row {
+  display: grid;
+  grid-template-columns: 150px 130px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 /* Money input: a leading "$" glued to a right-aligned number field. */

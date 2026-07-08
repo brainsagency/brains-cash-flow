@@ -54,6 +54,38 @@ describe("expandRecurring", () => {
       "2026-04-28",
     ]);
   });
+
+  it("applies per-month actual overrides to monthly items", () => {
+    const events = expandRecurring(
+      {
+        category: "amex",
+        amount: 40_000, // budget baseline
+        frequency: "monthly",
+        startDate: "2026-07-06",
+        overrides: { "2026-07": 43_210, "2026-09": 38_500 },
+      },
+      "2026-10-31",
+    );
+    const byMonth = Object.fromEntries(events.map((e) => [e.date.slice(0, 7), e.amount]));
+    expect(byMonth["2026-07"]).toBe(43_210); // actual
+    expect(byMonth["2026-08"]).toBe(40_000); // budget fallback
+    expect(byMonth["2026-09"]).toBe(38_500); // actual
+    expect(byMonth["2026-10"]).toBe(40_000); // budget fallback
+  });
+
+  it("ignores overrides on non-monthly items", () => {
+    const events = expandRecurring(
+      {
+        category: "operatingExpense",
+        amount: 1_000,
+        frequency: "weekly",
+        startDate: "2026-07-06",
+        overrides: { "2026-07": 5_000 },
+      },
+      "2026-07-20",
+    );
+    expect(events.every((e) => e.amount === 1_000)).toBe(true);
+  });
 });
 
 describe("pipelineToEvent", () => {

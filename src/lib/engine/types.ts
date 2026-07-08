@@ -110,6 +110,14 @@ export interface RecurringItem {
   /** committed (real cash) vs budgeted (model plan). Defaults to committed. */
   basis?: CashBasis;
   memo?: string;
+  /**
+   * Per-month actual overrides, keyed by calendar month ("YYYY-MM"). When a
+   * month has an entry, that month's occurrence uses the override amount
+   * instead of `amount` (the budget baseline). Intended for variable monthly
+   * expenses (e.g. AmEx): budget a placeholder, then drop in actuals as each
+   * month closes. Applied to `monthly`-frequency items only.
+   */
+  overrides?: Record<string, number>;
 }
 
 /**
