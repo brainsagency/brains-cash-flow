@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useMemo } from "react";
 import { daysBetween, type ForecastResult } from "@engine/index.js";
+import { useStore } from "@/lib/data/store.js";
 import { CashChart, type ChartPoint, type Overlay } from "@/components/CashChart.js";
 import { fmtAxisLabel, fmtDuration, fmtMoney, fmtShortDate } from "@/lib/format.js";
 
@@ -21,7 +23,15 @@ interface Props {
 }
 
 export function CashFlowCard({ view, onView, result, overlays, rangeOptions, rangeValue, onRange }: Props) {
+  const { setInput } = useStore();
+  const [showBalances, setShowBalances] = useState(false);
   const threshold = result.settings.lowCashThreshold ?? 250_000;
+
+  const toggleOperating = (id: string, operating: boolean) =>
+    setInput((prev) => ({
+      ...prev,
+      bankAccounts: prev.bankAccounts.map((a) => (a.id === id ? { ...a, operating } : a)),
+    }));
 
   const series: ChartPoint[] = useMemo(
     () =>
@@ -88,12 +98,28 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
 
       <div className="grid hero">
         <div className="callout">
-          <Stat
-            name="Today's balance"
-            date={balanceAsOf ? `as of ${fmtShortDate(balanceAsOf)}` : undefined}
-            value={fmtMoney(result.startingCash)}
-            sub={`From ${accountCount} bank account${accountCount === 1 ? "" : "s"}`}
-          />
+          <div className="stat" style={{ position: "relative" }}>
+            <div className="top">
+              <span className="name">Today&apos;s balance</span>
+              {balanceAsOf && <span className="date">as of {fmtShortDate(balanceAsOf)}</span>}
+            </div>
+            <button
+              className="big mono balance-toggle"
+              onClick={() => setShowBalances((v) => !v)}
+              title="Show account balances and pick which count"
+            >
+              {fmtMoney(result.startingCash)} <span className="caret">▾</span>
+            </button>
+            <div className="sub">From {accountCount} bank account{accountCount === 1 ? "" : "s"}</div>
+            {showBalances && (
+              <BalancesPopover
+                accounts={result.bankAccounts}
+                operatingTotal={result.startingCash}
+                onToggle={toggleOperating}
+                onClose={() => setShowBalances(false)}
+              />
+            )}
+          </div>
           <Stat
             name="Cash-out (below $0)"
             value={cashOut ? fmtDuration(cashOut.days, view === "week" ? "days" : "months") : "—"}
@@ -111,6 +137,45 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
         <CashChart series={series} threshold={threshold} overlays={overlays} todayLabel="today" />
       </div>
     </div>
+  );
+}
+
+function BalancesPopover({
+  accounts,
+  operatingTotal,
+  onToggle,
+  onClose,
+}: {
+  accounts: ForecastResult["bankAccounts"];
+  operatingTotal: number;
+  onToggle: (id: string, operating: boolean) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="popover-backdrop" onClick={onClose} />
+      <div className="popover" role="dialog" aria-label="Bank account balances">
+        <div className="pop-head">Accounts — tick which count toward cash flow</div>
+        {accounts.map((a) => {
+          const on = a.operating !== false;
+          return (
+            <label key={a.id} className="pop-row">
+              <input type="checkbox" checked={on} onChange={(e) => onToggle(a.id, e.target.checked)} />
+              <span className="pop-name">
+                {a.name}
+                {a.mask ? ` …${a.mask}` : ""}
+                {a.balanceAsOf ? <span className="pop-asof"> · {fmtShortDate(a.balanceAsOf)}</span> : null}
+              </span>
+              <span className={`pop-bal mono ${on ? "" : "muted"}`}>{fmtMoney(a.beginningBalance)}</span>
+            </label>
+          );
+        })}
+        <div className="pop-total">
+          <span>Operating cash</span>
+          <span className="mono">{fmtMoney(operatingTotal)}</span>
+        </div>
+      </div>
+    </>
   );
 }
 
