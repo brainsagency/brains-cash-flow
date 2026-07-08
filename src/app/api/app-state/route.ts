@@ -23,7 +23,9 @@ export async function GET() {
   return NextResponse.json({
     input: data?.input ?? null,
     scenarios: data?.scenarios ?? [],
-    apAdjustments: data?.ap_adjustments ?? {},
+    // Reuse the existing ap_adjustments column for all synced-item adjustments
+    // (keys are namespaced: qbo-inv-… / bill-…), so no schema migration.
+    adjustments: data?.ap_adjustments ?? {},
     updatedAt: data?.updated_at ?? null,
   });
 }
@@ -32,7 +34,7 @@ export async function PUT(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "cloud storage not configured" }, { status: 503 });
   }
-  let body: { input?: { anchorDate?: string; bankAccounts?: unknown[] }; scenarios?: unknown[]; apAdjustments?: Record<string, unknown> };
+  let body: { input?: { anchorDate?: string; bankAccounts?: unknown[] }; scenarios?: unknown[]; adjustments?: Record<string, unknown> };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -46,7 +48,7 @@ export async function PUT(req: NextRequest) {
     id: "default",
     input: body.input,
     scenarios: body.scenarios ?? [],
-    ap_adjustments: body.apAdjustments ?? {},
+    ap_adjustments: body.adjustments ?? {},
     updated_at: new Date().toISOString(),
   });
   if (error) {

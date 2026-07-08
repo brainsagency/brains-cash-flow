@@ -39,13 +39,17 @@ export interface UiPrefs {
 const DEFAULT_PREFS: UiPrefs = { view: "week", weekRange: 26, monthRange: 18 };
 
 /**
- * Per-bill annotation on synced AP, keyed by the event id (`bill-…`), so it
- * survives every re-sync. `excluded` drops the bill from the forecast (e.g.
- * production/passthrough bills for the sister company); `payDate` overrides
- * when the cash actually leaves (planned pay date vs the bill's due date).
+ * Per-item annotation on any synced ledger event, keyed by the event id
+ * (`qbo-inv-…` for invoices, `bill-…` for bills), so it survives every
+ * re-sync. `excluded` drops the item from the forecast (e.g. a disputed
+ * invoice, or a production/passthrough bill for the sister company); `date`
+ * overrides the cash date — the expected collection date for AR, or the
+ * planned pay date for AP — when it differs from the invoice/bill due date.
  */
-export interface ApAdjustment {
+export interface Adjustment {
   excluded?: boolean;
+  date?: string;
+  /** @deprecated read-only back-compat for AP data stored before the rename. */
   payDate?: string;
 }
 
@@ -53,7 +57,7 @@ interface AppState {
   input: ForecastInput; // the MANUAL layer
   scenarios: Scenario[];
   prefs: UiPrefs;
-  apAdjustments: Record<string, ApAdjustment>;
+  adjustments: Record<string, Adjustment>;
 }
 
 export type StorageMode = "cloud" | "local";
@@ -69,11 +73,12 @@ interface Store {
   qboSyncedAt: string | null;
   /** When Bill.com AP is overlaid, the sync timestamp; else null. */
   billSyncedAt: string | null;
-  /** Raw synced AP events (before exclusions/overrides) for the AP ledger. */
+  /** Raw synced AR / AP events (before exclusions/overrides) for the ledgers. */
+  syncedArRaw: CashEvent[] | null;
   syncedApRaw: CashEvent[] | null;
-  apAdjustments: Record<string, ApAdjustment>;
-  /** Patch a bill's adjustment; `payDate: null` clears the override. */
-  setApAdjustment: (id: string, patch: { excluded?: boolean; payDate?: string | null }) => void;
+  adjustments: Record<string, Adjustment>;
+  /** Patch a synced item's adjustment; `date: null` clears the override. */
+  setAdjustment: (id: string, patch: { excluded?: boolean; date?: string | null }) => void;
   setInput: (updater: (prev: ForecastInput) => ForecastInput) => void;
   setScenarios: (updater: (prev: Scenario[]) => Scenario[]) => void;
   setPrefs: (patch: Partial<UiPrefs>) => void;
@@ -85,7 +90,7 @@ interface Store {
 const StoreContext = createContext<Store | null>(null);
 
 function initialState(): AppState {
-  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS, apAdjustments: {} };
+  return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS, adjustments: {} };
 }
 
 // AR invoice categories that QuickBooks owns when connected.
@@ -96,7 +101,7 @@ const BILL_AP_CATEGORIES = new Set(["accountsPayable"]);
 interface CloudDoc {
   input: ForecastInput | null;
   scenarios?: Scenario[];
-  apAdjustments?: Record<string, ApAdjustment>;
+  adjustments?: Record<string, Adjustment>;
 }
 
 function readLocal(): Partial<AppState> | null {
@@ -108,7 +113,7 @@ function readLocal(): Partial<AppState> | null {
   }
 }
 
-async function putCloud(state: Pick<AppState, "input" | "scenarios" | "apAdjustments">): Promise<boolean> {
+async function putCloud(state: Pick<AppState, "input" | "scenarios" | "adjustments">): Promise<boolean> {
   try {
     const res = await fetch("/api/app-state", {
       method: "PUT",
@@ -116,7 +121,7 @@ async function putCloud(state: Pick<AppState, "input" | "scenarios" | "apAdjustm
       body: JSON.stringify({
         input: state.input,
         scenarios: state.scenarios,
-        apAdjustments: state.apAdjustments,
+        adjustments: state.adjustments,
       }),
     });
     return res.ok;
@@ -153,14 +158,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             next = {
               input: doc.input,
               scenarios: doc.scenarios ?? [],
-              apAdjustments: doc.apAdjustments ?? {},
+              adjustments: doc.adjustments ?? {},
               prefs,
             };
           } else {
             // First cloud run: adopt this browser's data (or the seed) and push it up.
             const base = ls?.input
-              ? { input: ls.input, scenarios: ls.scenarios ?? [], apAdjustments: ls.apAdjustments ?? {} }
-              : { input: SEED_INPUT, scenarios: SEED_SCENARIOS, apAdjustments: {} };
+              ? { input: ls.input, scenarios: ls.scenarios ?? [], adjustments: ls.adjustments ?? {} }
+              : { input: SEED_INPUT, scenarios: SEED_SCENARIOS, adjustments: {} };
             next = { ...base, prefs };
             void putCloud(base);
           }
@@ -171,7 +176,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       if (!next) {
         next = ls?.input
-          ? { input: ls.input, scenarios: ls.scenarios ?? [], apAdjustments: ls.apAdjustments ?? {}, prefs }
+          ? { input: ls.input, scenarios: ls.scenarios ?? [], adjustments: ls.adjustments ?? {}, prefs }
           : { ...initialState(), prefs };
       }
       if (!cancelled) {
@@ -253,16 +258,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (patch: Partial<UiPrefs>) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...patch } })),
     [],
   );
-  const setApAdjustment = useCallback(
-    (id: string, patch: { excluded?: boolean; payDate?: string | null }) =>
+  const setAdjustment = useCallback(
+    (id: string, patch: { excluded?: boolean; date?: string | null }) =>
       setState((s) => {
-        const cur: ApAdjustment = { ...(s.apAdjustments[id] ?? {}) };
+        const cur: Adjustment = { ...(s.adjustments[id] ?? {}) };
         if (patch.excluded !== undefined) cur.excluded = patch.excluded;
-        if (patch.payDate !== undefined) {
-          if (patch.payDate === null) delete cur.payDate;
-          else cur.payDate = patch.payDate;
+        if (patch.date !== undefined) {
+          if (patch.date === null) delete cur.date;
+          else cur.date = patch.date;
         }
-        return { ...s, apAdjustments: { ...s.apAdjustments, [id]: cur } };
+        return { ...s, adjustments: { ...s.adjustments, [id]: cur } };
       }),
     [],
   );
@@ -270,8 +275,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced
   // Bill.com AP replaces manual accountsPayable (apEstimate stays manual).
-  // Per-bill adjustments apply here: excluded bills drop out of the forecast,
-  // planned-pay-date overrides move the cash-out date (clamped to the anchor).
+  // Per-item adjustments apply to both: excluded items drop from the forecast;
+  // a date override moves the cash date (collection for AR, payment for AP),
+  // clamped to the anchor so a past date can't fall out of the horizon.
   const mergedInput = useMemo<ForecastInput>(() => {
     const hasAr = syncedAr && syncedAr.length > 0;
     const hasAp = syncedAp && syncedAp.length > 0;
@@ -281,18 +287,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
 
     const anchor = state.input.anchorDate;
-    const adjustedAp = (hasAp ? syncedAp : []).flatMap((e) => {
-      const adj = state.apAdjustments[e.id ?? ""] ?? {};
-      if (adj.excluded) return [];
-      if (adj.payDate) return [{ ...e, date: adj.payDate < anchor ? anchor : adj.payDate }];
-      return [e];
-    });
+    const applyAdjustments = (list: CashEvent[]) =>
+      list.flatMap((e) => {
+        const adj = state.adjustments[e.id ?? ""] ?? {};
+        if (adj.excluded) return [];
+        const override = adj.date ?? adj.payDate; // payDate = legacy AP field
+        if (override) return [{ ...e, date: override < anchor ? anchor : override }];
+        return [e];
+      });
 
     return {
       ...state.input,
-      events: [...events, ...(hasAr ? syncedAr : []), ...adjustedAp],
+      events: [
+        ...events,
+        ...applyAdjustments(hasAr ? syncedAr : []),
+        ...applyAdjustments(hasAp ? syncedAp : []),
+      ],
     };
-  }, [state.input, state.apAdjustments, syncedAr, syncedAp]);
+  }, [state.input, state.adjustments, syncedAr, syncedAp]);
 
   return (
     <StoreContext.Provider
@@ -304,9 +316,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         storageMode,
         qboSyncedAt,
         billSyncedAt,
+        syncedArRaw: syncedAr,
         syncedApRaw: syncedAp,
-        apAdjustments: state.apAdjustments,
-        setApAdjustment,
+        adjustments: state.adjustments,
+        setAdjustment,
         setInput,
         setScenarios,
         setPrefs,

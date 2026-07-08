@@ -12,8 +12,7 @@ import { CashFlowCard, type RangeOption } from "@/components/CashFlowCard.js";
 import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
-import { ReceivablesPayables } from "@/components/ReceivablesPayables.js";
-import { ApLedger } from "@/components/ApLedger.js";
+import { SyncedLedger } from "@/components/SyncedLedger.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
@@ -174,13 +173,13 @@ export default function Dashboard() {
         {nav === "invoices" && (
           <div className="grid" style={{ gap: 16 }}>
             <QboPanel />
-            <ReceivablesPayables show="ar" />
+            <SyncedLedger kind="ar" />
           </div>
         )}
         {nav === "bills" && (
           <div className="grid" style={{ gap: 16 }}>
             <BillPanel />
-            <ApLedger />
+            <SyncedLedger kind="ap" />
             <OtherWithdrawals />
           </div>
         )}
