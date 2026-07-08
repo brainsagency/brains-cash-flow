@@ -89,6 +89,12 @@ export interface LayoffGroupLever {
   severanceWeeks?: number;
   /** Per-person severance override (weeks of pay), keyed by staff id. */
   severanceByStaff?: Record<string, number>;
+  /**
+   * How severance is disbursed. "lump" (default) = one payment on the
+   * effective date. "payroll" = keep the person on the regular payroll
+   * schedule for the severance window (paid across their normal paydays).
+   */
+  severancePayout?: "lump" | "payroll";
   label?: string;
 }
 
@@ -231,6 +237,7 @@ function monthlyEquiv(item: RecurringItem): number {
 }
 
 function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
+  const payout = lever.severancePayout ?? "lump";
   const cutoff = addDays(lever.effectiveDate, -1);
   const covers = (item: RecurringItem) =>
     item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
@@ -238,16 +245,19 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
   for (const id of lever.staffIds) {
     // Per-person severance weeks, falling back to the group default.
     const weeks = lever.severanceByStaff?.[id] ?? lever.severanceWeeks ?? 0;
+    // "payroll" keeps them on the payroll schedule for the severance window;
+    // "lump" stops pay at the layoff date and cuts one severance check.
+    const stopAt = payout === "payroll" && weeks > 0 ? addDays(lever.effectiveDate, Math.round(weeks * 7) - 1) : cutoff;
     const prefix = `staff:${id}:`;
     let monthlyAtLayoff = 0;
     for (const item of input.recurring!) {
       if (!item.id || !item.id.startsWith(prefix)) continue;
       if (covers(item)) monthlyAtLayoff += monthlyEquiv(item);
-      // Stop the pay at the layoff date (never extend an earlier end).
-      item.endDate = item.endDate && item.endDate < cutoff ? item.endDate : cutoff;
+      // Never extend an item that already ends earlier than the stop date.
+      item.endDate = item.endDate && item.endDate < stopAt ? item.endDate : stopAt;
     }
     const weeklyAtLayoff = (monthlyAtLayoff * 12) / 52;
-    if (weeks > 0 && weeklyAtLayoff > 0) {
+    if (payout === "lump" && weeks > 0 && weeklyAtLayoff > 0) {
       input.events!.push({
         id: `layoff-sev:${id}`,
         category: "payroll",

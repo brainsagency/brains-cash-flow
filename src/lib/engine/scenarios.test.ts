@@ -144,6 +144,27 @@ describe("scenario levers", () => {
     expect(finalEnding(flat) - finalEnding(perPerson)).toBeCloseTo(weekly * 4, 5);
   });
 
+  it("layoffGroup pays severance as a lump or across the payroll window", () => {
+    const rosterBase: ForecastInput = {
+      anchorDate: ANCHOR,
+      bankAccounts: [{ id: "op", name: "Op", beginningBalance: 500_000 }],
+      recurring: [
+        { id: "staff:s1:salary", category: "payroll", amount: 5_000, frequency: "semimonthly", startDate: ANCHOR },
+      ],
+    };
+    const lever = { kind: "layoffGroup" as const, staffIds: ["s1"], effectiveDate: "2026-10-01", severanceWeeks: 4 };
+
+    const lump = applyScenario(rosterBase, { id: "l", name: "l", levers: [{ ...lever, severancePayout: "lump" }] });
+    const lumpItem = lump.recurring!.find((r) => r.id === "staff:s1:salary")!;
+    expect(lumpItem.endDate).toBe("2026-09-30"); // pay stops the day before
+    expect(lump.events!.some((e) => e.id === "layoff-sev:s1")).toBe(true); // one severance check
+
+    const sched = applyScenario(rosterBase, { id: "p", name: "p", levers: [{ ...lever, severancePayout: "payroll" }] });
+    const schedItem = sched.recurring!.find((r) => r.id === "staff:s1:salary")!;
+    expect(schedItem.endDate).toBe("2026-10-28"); // kept on payroll 4 weeks (28 days) past the date
+    expect(sched.events!.some((e) => e.id === "layoff-sev:s1")).toBe(false); // no lump — paid on schedule
+  });
+
   it("addRevenue (one-off) raises ending cash by the amount", () => {
     const withRev = runScenario(base(), {
       id: "rev",

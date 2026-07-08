@@ -143,7 +143,7 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
             <label>Effective date</label>
             <input type="date" value={lever.effectiveDate} onChange={(e) => onChange({ effectiveDate: e.target.value } as Partial<Lever>)} />
           </div>
-          <div className="field" style={{ maxWidth: 170 }}>
+          <div className="field" style={{ maxWidth: 150 }}>
             <label>Default severance (weeks)</label>
             <input
               type="number"
@@ -152,6 +152,16 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
               value={defaultWeeks}
               onChange={(e) => onChange({ severanceWeeks: Number(e.target.value) } as Partial<Lever>)}
             />
+          </div>
+          <div className="field" style={{ maxWidth: 180 }}>
+            <label>Severance payout</label>
+            <select
+              value={lever.severancePayout ?? "lump"}
+              onChange={(e) => onChange({ severancePayout: e.target.value } as Partial<Lever>)}
+            >
+              <option value="lump">Lump sum</option>
+              <option value="payroll">On payroll schedule</option>
+            </select>
           </div>
         </div>
         <div className="muted" style={{ marginBottom: 6, fontSize: 12 }}>
