@@ -19,24 +19,9 @@
  */
 
 import { addDays, type ISODate } from "../dates.js";
-import type { CashBasis, RecurringItem } from "../types.js";
+import type { CashBasis, RecurringItem, StaffMember } from "../types.js";
 
-export interface StaffMember {
-  id: string;
-  name: string;
-  /** Current annual (gross) salary. */
-  annualSalary: number;
-  /** Date of hire. Payroll starts here (or at the forecast anchor if earlier). */
-  doh: ISODate;
-  /** Date of termination, if any. Payroll stops here. */
-  dot?: ISODate;
-  /** Effective date of a scheduled salary change, if any. */
-  salaryChangeDate?: ISODate;
-  /** New annual (gross) salary from `salaryChangeDate`. */
-  newSalary?: number;
-  /** Cost center / role, carried into the memo for drill-down. */
-  costCenter?: string;
-}
+export type { StaffMember } from "../types.js";
 
 export interface StaffToPayrollOptions {
   /** Multiply gross salary to approximate loaded cash cost. Defaults to 1. */

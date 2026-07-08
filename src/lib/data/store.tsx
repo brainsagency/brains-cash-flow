@@ -24,7 +24,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { CashEvent, ForecastInput, Scenario } from "@engine/index.js";
+import { staffToPayroll, type CashEvent, type ForecastInput, type Scenario } from "@engine/index.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
@@ -273,6 +273,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const reset = useCallback(() => setState(initialState()), []);
 
+  // Staff-expanded base: when a roster is present it is the authoritative
+  // payroll source — expand it into payroll streams that supersede any manual
+  // `payroll` recurring items, plus a one-off severance disbursement on each
+  // termination date. No roster → the manual payroll line stands.
+  const staffBase = useMemo<ForecastInput>(() => {
+    const staff = state.input.staff ?? [];
+    if (staff.length === 0) return state.input;
+
+    const payroll = staffToPayroll(staff, {
+      loadFactor: state.input.staffLoadFactor ?? 1,
+      defaultBasis: "committed",
+    });
+    const recurring = [
+      ...(state.input.recurring ?? []).filter((r) => r.category !== "payroll"),
+      ...payroll,
+    ];
+    const severance: CashEvent[] = staff
+      .filter((m) => m.dot && m.severance && m.severance > 0)
+      .map((m) => ({
+        id: `staff-sev:${m.id}`,
+        category: "payroll",
+        amount: m.severance!,
+        date: m.dot!,
+        basis: "committed",
+        memo: `Severance: ${m.name}`,
+      }));
+
+    return { ...state.input, recurring, events: [...(state.input.events ?? []), ...severance] };
+  }, [state.input]);
+
   // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced
   // Bill.com AP replaces manual accountsPayable (apEstimate stays manual).
   // Per-item adjustments apply to both: excluded items drop from the forecast;
@@ -281,12 +311,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const mergedInput = useMemo<ForecastInput>(() => {
     const hasAr = syncedAr && syncedAr.length > 0;
     const hasAp = syncedAp && syncedAp.length > 0;
-    if (!hasAr && !hasAp) return state.input;
-    let events = state.input.events ?? [];
+    if (!hasAr && !hasAp) return staffBase;
+    let events = staffBase.events ?? [];
     if (hasAr) events = events.filter((e) => !QBO_AR_CATEGORIES.has(e.category));
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
 
-    const anchor = state.input.anchorDate;
+    const anchor = staffBase.anchorDate;
     const applyAdjustments = (list: CashEvent[]) =>
       list.flatMap((e) => {
         const adj = state.adjustments[e.id ?? ""] ?? {};
@@ -297,14 +327,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
 
     return {
-      ...state.input,
+      ...staffBase,
       events: [
         ...events,
         ...applyAdjustments(hasAr ? syncedAr : []),
         ...applyAdjustments(hasAp ? syncedAp : []),
       ],
     };
-  }, [state.input, state.adjustments, syncedAr, syncedAp]);
+  }, [staffBase, state.adjustments, syncedAr, syncedAp]);
 
   return (
     <StoreContext.Provider

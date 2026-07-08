@@ -112,6 +112,32 @@ export interface RecurringItem {
   memo?: string;
 }
 
+/**
+ * One person on the staff roster — the authoritative payroll source when
+ * present. Mirrors the model's Staff tab: annual (gross) salary, hire date,
+ * optional termination date, and an optional scheduled raise. The roster is
+ * expanded into payroll cash streams (see `staffToPayroll`); it is *data the
+ * store reads*, not something the pure engine interprets.
+ */
+export interface StaffMember {
+  id: string;
+  name: string;
+  /** Current annual (gross) salary. */
+  annualSalary: number;
+  /** Date of hire. Payroll starts here (or at the forecast anchor if earlier). */
+  doh: ISODate;
+  /** Date of termination, if any. Payroll stops here. */
+  dot?: ISODate;
+  /** One-time severance paid on `dot`. */
+  severance?: number;
+  /** Effective date of a scheduled salary change, if any. */
+  salaryChangeDate?: ISODate;
+  /** New annual (gross) salary from `salaryChangeDate`. */
+  newSalary?: number;
+  /** Cost center / role, carried into the memo for drill-down. */
+  costCenter?: string;
+}
+
 /** A CRM deal, converted to a probability-weighted receipt on close + lag. */
 export interface PipelineDeal {
   id: string;
@@ -222,6 +248,15 @@ export interface ForecastInput {
   events?: CashEvent[];
   /** Repeating items (payroll, retainers, rent). */
   recurring?: RecurringItem[];
+  /**
+   * Staff roster. When non-empty, the store expands it into payroll streams
+   * (via `staffToPayroll`) that supersede any manual `payroll` recurring items,
+   * and adds a one-off severance disbursement on each termination date. The
+   * pure engine ignores this field — expansion happens in the client store.
+   */
+  staff?: StaffMember[];
+  /** Multiply gross salary → loaded payroll cash (taxes/benefits). Defaults to 1. */
+  staffLoadFactor?: number;
   /** CRM deals; only counted when `includePipeline` is true. */
   pipeline?: PipelineDeal[];
   /** Toggle for pipeline revenue (matches the sheet's pipeline toggle). */

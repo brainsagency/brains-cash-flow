@@ -14,6 +14,7 @@ import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
 import { SyncedLedger } from "@/components/SyncedLedger.js";
 import { OperatingExpenses } from "@/components/OperatingExpenses.js";
+import { StaffRoster } from "@/components/StaffRoster.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { QboPanel } from "@/components/QboPanel.js";
 import { BillPanel } from "@/components/BillPanel.js";
@@ -204,6 +205,8 @@ export default function Dashboard() {
         )}
 
         {nav === "opex" && <OperatingExpenses />}
+
+        {nav === "staff" && <StaffRoster />}
 
         {nav === "scenarios" && (
           <ScenarioPanel

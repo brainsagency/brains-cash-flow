@@ -7,6 +7,7 @@ export type ViewKey =
   | "invoices"
   | "bills"
   | "opex"
+  | "staff"
   | "scenarios"
   | "insights"
   | "assumptions";
@@ -16,6 +17,7 @@ export const NAV: Array<{ key: ViewKey; label: string; title: string; icon: Reac
   { key: "invoices", label: "Invoices Due (AR)", title: "Invoices Due (AR)", icon: <IconInvoice /> },
   { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", icon: <IconBill /> },
   { key: "opex", label: "Operating Expenses", title: "Operating Expenses", icon: <IconRepeat /> },
+  { key: "staff", label: "Staff Roster", title: "Staff Roster", icon: <IconPeople /> },
   { key: "scenarios", label: "Scenarios", title: "Scenario planning", icon: <IconLayers /> },
   { key: "insights", label: "Insights", title: "Insights", icon: <IconPie /> },
   { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", icon: <IconGear /> },
@@ -93,6 +95,16 @@ function IconRepeat() {
       <path d="M3 11V9a4 4 0 0 1 4-4h14" />
       <path d="M7 22l-4-4 4-4" />
       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </>,
+  );
+}
+function IconPeople() {
+  return svg(
+    <>
+      <path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="3" />
+      <path d="M22 20v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13A4 4 0 0 1 16 11" />
     </>,
   );
 }
