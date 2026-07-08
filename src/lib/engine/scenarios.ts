@@ -238,6 +238,9 @@ function monthlyEquiv(item: RecurringItem): number {
 
 function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
   const payout = lever.severancePayout ?? "lump";
+  // Severance is gross pay — strip the employer load that inflates the roster's
+  // payroll items (no benefits/401k on a severance check).
+  const load = input.staffLoadFactor ?? 1;
   const cutoff = addDays(lever.effectiveDate, -1);
   const covers = (item: RecurringItem) =>
     item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
@@ -245,23 +248,33 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
   for (const id of lever.staffIds) {
     // Per-person severance weeks, falling back to the group default.
     const weeks = lever.severanceByStaff?.[id] ?? lever.severanceWeeks ?? 0;
-    // "payroll" keeps them on the payroll schedule for the severance window;
-    // "lump" stops pay at the layoff date and cuts one severance check.
-    const stopAt = payout === "payroll" && weeks > 0 ? addDays(lever.effectiveDate, Math.round(weeks * 7) - 1) : cutoff;
     const prefix = `staff:${id}:`;
     let monthlyAtLayoff = 0;
     for (const item of input.recurring!) {
       if (!item.id || !item.id.startsWith(prefix)) continue;
       if (covers(item)) monthlyAtLayoff += monthlyEquiv(item);
-      // Never extend an item that already ends earlier than the stop date.
-      item.endDate = item.endDate && item.endDate < stopAt ? item.endDate : stopAt;
+      // Ongoing pay always stops at the layoff date (never extend an earlier end).
+      item.endDate = item.endDate && item.endDate < cutoff ? item.endDate : cutoff;
     }
-    const weeklyAtLayoff = (monthlyAtLayoff * 12) / 52;
-    if (payout === "lump" && weeks > 0 && weeklyAtLayoff > 0) {
+    if (weeks <= 0 || monthlyAtLayoff <= 0) continue;
+    const grossMonthly = monthlyAtLayoff / load;
+    const grossWeekly = (grossMonthly * 12) / 52;
+    if (payout === "payroll") {
+      // Pay the gross severance across the normal semi-monthly paydays for the window.
+      input.recurring!.push({
+        id: `layoff-sev:${id}`,
+        category: "payroll",
+        amount: grossMonthly / 2, // gross per semi-monthly run
+        frequency: "semimonthly",
+        startDate: lever.effectiveDate,
+        endDate: addDays(lever.effectiveDate, Math.round(weeks * 7) - 1),
+        memo: `Severance (${weeks}wk, payroll)`,
+      });
+    } else {
       input.events!.push({
         id: `layoff-sev:${id}`,
         category: "payroll",
-        amount: weeklyAtLayoff * weeks,
+        amount: grossWeekly * weeks,
         date: lever.effectiveDate,
         memo: `Severance (${weeks}wk)`,
       });

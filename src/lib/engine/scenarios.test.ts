@@ -154,15 +154,25 @@ describe("scenario levers", () => {
     };
     const lever = { kind: "layoffGroup" as const, staffIds: ["s1"], effectiveDate: "2026-10-01", severanceWeeks: 4 };
 
+    // s1: 5,000 semi-monthly (load 1) → gross weekly = 10,000*12/52. 4 weeks severance.
+    const grossWeekly = (10_000 * 12) / 52;
+
     const lump = applyScenario(rosterBase, { id: "l", name: "l", levers: [{ ...lever, severancePayout: "lump" }] });
     const lumpItem = lump.recurring!.find((r) => r.id === "staff:s1:salary")!;
     expect(lumpItem.endDate).toBe("2026-09-30"); // pay stops the day before
-    expect(lump.events!.some((e) => e.id === "layoff-sev:s1")).toBe(true); // one severance check
+    const lumpSev = lump.events!.find((e) => e.id === "layoff-sev:s1")!;
+    expect(lumpSev.amount).toBeCloseTo(grossWeekly * 4, 5); // one gross severance check
+    expect(lumpSev.date).toBe("2026-10-01");
 
     const sched = applyScenario(rosterBase, { id: "p", name: "p", levers: [{ ...lever, severancePayout: "payroll" }] });
     const schedItem = sched.recurring!.find((r) => r.id === "staff:s1:salary")!;
-    expect(schedItem.endDate).toBe("2026-10-28"); // kept on payroll 4 weeks (28 days) past the date
-    expect(sched.events!.some((e) => e.id === "layoff-sev:s1")).toBe(false); // no lump — paid on schedule
+    expect(schedItem.endDate).toBe("2026-09-30"); // real pay still stops at the layoff date
+    const schedSev = sched.recurring!.find((r) => r.id === "layoff-sev:s1")!; // gross paid on the schedule
+    expect(schedSev.frequency).toBe("semimonthly");
+    expect(schedSev.startDate).toBe("2026-10-01");
+    expect(schedSev.endDate).toBe("2026-10-28"); // 4-week window (28 days)
+    expect(schedSev.amount).toBeCloseTo(5_000, 5); // gross per semi-monthly run (10k/mo ÷ 2)
+    expect(sched.events!.some((e) => e.id === "layoff-sev:s1")).toBe(false);
   });
 
   it("addRevenue (one-off) raises ending cash by the amount", () => {

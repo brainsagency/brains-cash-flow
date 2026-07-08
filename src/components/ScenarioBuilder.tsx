@@ -18,8 +18,6 @@ interface Props {
   initial: Scenario | null;
   staff: StaffMember[];
   anchor: string;
-  /** Employer load factor, for accurate severance $ previews. */
-  loadFactor: number;
   onSave: (s: Scenario) => void;
   onClose: () => void;
   onDelete?: () => void;
@@ -41,7 +39,7 @@ function defaultLever(kind: LeverKind, anchor: string): Lever {
   }
 }
 
-export function ScenarioBuilder({ initial, staff, anchor, loadFactor, onSave, onClose, onDelete }: Props) {
+export function ScenarioBuilder({ initial, staff, anchor, onSave, onClose, onDelete }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [levers, setLevers] = useState<Lever[]>(initial?.levers ?? []);
 
@@ -77,7 +75,7 @@ export function ScenarioBuilder({ initial, staff, anchor, loadFactor, onSave, on
               <div className="spacer" />
               <button className="btn sm ghost" onClick={() => removeLever(i)} title="Remove lever">✕</button>
             </div>
-            <LeverEditor lever={l} staff={staff} loadFactor={loadFactor} onChange={(patch) => setLever(i, patch)} />
+            <LeverEditor lever={l} staff={staff} onChange={(patch) => setLever(i, patch)} />
           </div>
         ))}
 
@@ -113,14 +111,14 @@ function leverTitle(kind: LeverKind): string {
   }
 }
 
-function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; staff: StaffMember[]; loadFactor: number; onChange: (patch: Partial<Lever>) => void }) {
+function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMember[]; onChange: (patch: Partial<Lever>) => void }) {
   if (lever.kind === "layoffGroup") {
     const selected = new Set(lever.staffIds);
     const byStaff = lever.severanceByStaff ?? {};
     const defaultWeeks = lever.severanceWeeks ?? 0;
     const weeksFor = (id: string) => byStaff[id] ?? defaultWeeks;
-    // Loaded weekly pay for a person, for the severance $ preview.
-    const weeklyPay = (m: StaffMember) => (m.annualSalary * loadFactor) / 52;
+    // Severance is gross pay (no employer load).
+    const weeklyPay = (m: StaffMember) => m.annualSalary / 52;
 
     const toggle = (id: string) => {
       const next = new Set(selected);
