@@ -36,21 +36,20 @@ export function NewBusiness() {
   const deals = input.pipeline ?? [];
   const anchor = input.anchorDate;
   const [fill, setFill] = useState<Record<string, FillDraft>>({});
+  // Which deals are expanded. Deals collapse by default so the list stays a
+  // compact set of toggles; a freshly added deal opens so you can fill it in.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const toggleOpen = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const write = (next: PipelineDeal[]) => setInput((prev: ForecastInput) => ({ ...prev, pipeline: next }));
   const update = (i: number, patch: Partial<PipelineDeal>) =>
     write(deals.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   const remove = (i: number) => write(deals.filter((_, idx) => idx !== i));
-  const add = () =>
-    write([
-      ...deals,
-      {
-        id: `deal-${Date.now()}`,
-        name: "",
-        enabled: true,
-        billings: [{ date: addMonths(anchor, 1), amount: 50_000 }],
-      },
-    ]);
+  const add = () => {
+    const id = `deal-${Date.now()}`;
+    setOpen((prev) => ({ ...prev, [id]: true }));
+    write([...deals, { id, name: "", enabled: true, billings: [{ date: addMonths(anchor, 1), amount: 50_000 }] }]);
+  };
 
   const setBillings = (i: number, billings: Billing[]) => update(i, { billings });
   const updateBilling = (i: number, bi: number, patch: Partial<Billing>) =>
@@ -117,6 +116,8 @@ export function NewBusiness() {
         const on = isOn(d);
         const bs = d.billings ?? [];
         const draft = draftFor(d);
+        const isOpen = open[d.id] ?? false;
+        const firstDate = bs.filter((b) => isValidISODate(b.date)).map((b) => b.date).sort()[0];
         return (
           <div
             key={d.id}
@@ -144,12 +145,29 @@ export function NewBusiness() {
               <span className="mono" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
                 {fmtMoney(dealTotal(d))}
               </span>
+              <button
+                className="btn sm ghost"
+                onClick={() => toggleOpen(d.id)}
+                title={isOpen ? "Collapse schedule" : "Edit schedule"}
+                aria-expanded={isOpen}
+              >
+                {isOpen ? "▾" : "▸"}
+              </button>
               <button className="btn sm ghost" onClick={() => remove(i)} title="Remove opportunity">
                 ✕
               </button>
             </div>
 
+            {!isOpen && (
+              <div className="muted" style={{ paddingLeft: 26, fontSize: 12 }}>
+                {bs.length === 0
+                  ? "No billings — expand to add a schedule"
+                  : `${bs.length} billing${bs.length === 1 ? "" : "s"}${firstDate ? ` · first ${fmtShortDate(firstDate)}` : ""}`}
+              </div>
+            )}
+
             {/* Billing schedule */}
+            {isOpen && (
             <div style={{ paddingLeft: 26 }}>
               {bs.length > 0 && (
                 <div
@@ -230,6 +248,7 @@ export function NewBusiness() {
                 </div>
               )}
             </div>
+            )}
           </div>
         );
       })}
