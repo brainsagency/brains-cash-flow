@@ -85,7 +85,7 @@ describe("scenario levers", () => {
     expect(finalEnding(result)).toBeGreaterThan(finalEnding(baseline));
   });
 
-  it("layoffGroup stops roster pay and adds months-of-pay severance", () => {
+  it("layoffGroup stops roster pay and adds weeks-of-pay severance", () => {
     // Two roster people, expanded to semi-monthly payroll (annual/24 per run).
     const rosterBase: ForecastInput = {
       anchorDate: ANCHOR,
@@ -99,11 +99,10 @@ describe("scenario levers", () => {
     const laid = runScenario(rosterBase, {
       id: "rif",
       name: "RIF",
-      levers: [{ kind: "layoffGroup", staffIds: ["s1"], effectiveDate: "2026-10-01", severanceMonths: 2 }],
+      levers: [{ kind: "layoffGroup", staffIds: ["s1"], effectiveDate: "2026-10-01", severanceWeeks: 4 }],
     });
-    // Ends higher (pay stopped for s1) despite a 2-month severance one-off.
+    // Ends higher (pay stopped for s1) despite a 4-week severance one-off.
     expect(finalEnding(laid)).toBeGreaterThan(finalEnding(kept));
-    // Severance = 2 months of s1's monthly pay (5,000 * 2 per month * 2 months).
     const sev = laid.periods.find((p) => p.period.start <= "2026-10-01" && p.period.end >= "2026-10-01");
     expect(sev).toBeTruthy();
   });
@@ -121,9 +120,9 @@ describe("scenario levers", () => {
     const flat = runScenario(rosterBase, {
       id: "flat",
       name: "flat",
-      levers: [{ kind: "layoffGroup", staffIds: ["s1", "s2"], effectiveDate: "2026-10-01", severanceMonths: 1 }],
+      levers: [{ kind: "layoffGroup", staffIds: ["s1", "s2"], effectiveDate: "2026-10-01", severanceWeeks: 2 }],
     });
-    // Same layoff, but s2 negotiated 3 months instead of the 1-month default.
+    // Same layoff, but s2 negotiated 6 weeks instead of the 2-week default.
     const perPerson = runScenario(rosterBase, {
       id: "perPerson",
       name: "perPerson",
@@ -132,16 +131,17 @@ describe("scenario levers", () => {
           kind: "layoffGroup",
           staffIds: ["s1", "s2"],
           effectiveDate: "2026-10-01",
-          severanceMonths: 1,
-          severanceByStaff: { s2: 3 },
+          severanceWeeks: 2,
+          severanceByStaff: { s2: 6 },
         },
       ],
     });
     // Laying people off saves net cash vs keeping them; the extra severance for
-    // s2 is a cost, so the per-person case ends lower than the flat 1-month case
-    // by exactly 2 extra months of s2's pay (10k/mo * 2 = 20k).
+    // s2 is a cost, so the per-person case ends lower than the flat 2-week case
+    // by exactly 4 extra weeks of s2's pay (10k/mo * 12/52 per week * 4 weeks).
+    const weekly = (10_000 * 12) / 52;
     expect(finalEnding(flat)).toBeGreaterThan(finalEnding(baseline));
-    expect(finalEnding(flat) - finalEnding(perPerson)).toBeCloseTo(20_000, 5);
+    expect(finalEnding(flat) - finalEnding(perPerson)).toBeCloseTo(weekly * 4, 5);
   });
 
   it("addRevenue (one-off) raises ending cash by the amount", () => {

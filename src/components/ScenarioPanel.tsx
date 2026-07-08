@@ -134,7 +134,7 @@ function leverLabel(l: Lever): string {
     case "layoff":
       return `– Layoff ${l.role}`;
     case "layoffGroup": {
-      const hasSev = (l.severanceMonths ?? 0) > 0 || Object.keys(l.severanceByStaff ?? {}).length > 0;
+      const hasSev = (l.severanceWeeks ?? 0) > 0 || Object.keys(l.severanceByStaff ?? {}).length > 0;
       return `– Lay off ${l.staffIds.length}${hasSev ? " (+sev)" : ""}`;
     }
     case "addRevenue":

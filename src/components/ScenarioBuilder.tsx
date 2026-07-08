@@ -31,7 +31,7 @@ function defaultLever(kind: LeverKind, anchor: string): Lever {
   const firstOfNextMonth = `${anchor.slice(0, 7)}-01`;
   switch (kind) {
     case "layoffGroup":
-      return { kind, staffIds: [], effectiveDate: firstOfNextMonth, severanceMonths: 2 };
+      return { kind, staffIds: [], effectiveDate: firstOfNextMonth, severanceWeeks: 4 };
     case "addRevenue":
       return { kind, mode: "recurring", amount: 25_000, startDate: firstOfNextMonth, label: "" };
     case "hire":
@@ -117,10 +117,10 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
   if (lever.kind === "layoffGroup") {
     const selected = new Set(lever.staffIds);
     const byStaff = lever.severanceByStaff ?? {};
-    const defaultMonths = lever.severanceMonths ?? 0;
-    const monthsFor = (id: string) => byStaff[id] ?? defaultMonths;
-    // Loaded monthly pay for a person, for the severance $ preview.
-    const monthlyPay = (m: StaffMember) => (m.annualSalary * loadFactor) / 12;
+    const defaultWeeks = lever.severanceWeeks ?? 0;
+    const weeksFor = (id: string) => byStaff[id] ?? defaultWeeks;
+    // Loaded weekly pay for a person, for the severance $ preview.
+    const weeklyPay = (m: StaffMember) => (m.annualSalary * loadFactor) / 52;
 
     const toggle = (id: string) => {
       const next = new Set(selected);
@@ -129,12 +129,12 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
       else next.add(id);
       onChange({ staffIds: [...next], severanceByStaff: nextBy } as Partial<Lever>);
     };
-    const setPersonMonths = (id: string, months: number) =>
-      onChange({ severanceByStaff: { ...byStaff, [id]: months } } as Partial<Lever>);
+    const setPersonWeeks = (id: string, weeks: number) =>
+      onChange({ severanceByStaff: { ...byStaff, [id]: weeks } } as Partial<Lever>);
 
     const selStaff = staff.filter((m) => selected.has(m.id));
     const selAnnual = selStaff.reduce((s, m) => s + m.annualSalary, 0);
-    const totalSeverance = selStaff.reduce((s, m) => s + monthlyPay(m) * monthsFor(m.id), 0);
+    const totalSeverance = selStaff.reduce((s, m) => s + weeklyPay(m) * weeksFor(m.id), 0);
 
     return (
       <>
@@ -144,13 +144,13 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
             <input type="date" value={lever.effectiveDate} onChange={(e) => onChange({ effectiveDate: e.target.value } as Partial<Lever>)} />
           </div>
           <div className="field" style={{ maxWidth: 170 }}>
-            <label>Default severance (months)</label>
+            <label>Default severance (weeks)</label>
             <input
               type="number"
               min={0}
-              step={0.5}
-              value={defaultMonths}
-              onChange={(e) => onChange({ severanceMonths: Number(e.target.value) } as Partial<Lever>)}
+              step={1}
+              value={defaultWeeks}
+              onChange={(e) => onChange({ severanceWeeks: Number(e.target.value) } as Partial<Lever>)}
             />
           </div>
         </div>
@@ -173,13 +173,13 @@ function LeverEditor({ lever, staff, loadFactor, onChange }: { lever: Lever; sta
                     <input
                       type="number"
                       min={0}
-                      step={0.5}
-                      value={monthsFor(m.id)}
-                      onChange={(e) => setPersonMonths(m.id, Number(e.target.value))}
+                      step={1}
+                      value={weeksFor(m.id)}
+                      onChange={(e) => setPersonWeeks(m.id, Number(e.target.value))}
                       style={{ width: 56, padding: "3px 5px" }}
-                      title="Severance months for this person"
+                      title="Severance weeks for this person"
                     />
-                    <span style={{ fontSize: 12 }}>mo ≈ {fmtMoney(monthlyPay(m) * monthsFor(m.id))}</span>
+                    <span style={{ fontSize: 12 }}>wk ≈ {fmtMoney(weeklyPay(m) * weeksFor(m.id))}</span>
                   </span>
                 ) : (
                   <span className="sal">{fmtMoney(m.annualSalary)}</span>

@@ -78,16 +78,16 @@ export interface CollectionTimingLever {
 /**
  * Lay off a group of real roster people from `effectiveDate`. Each person's
  * expanded payroll (items id-prefixed `staff:<id>:`) is truncated at the date,
- * and severance = `severanceMonths` × their monthly pay lands on that date.
+ * and severance = `severanceWeeks` × their weekly pay lands on that date.
  * Operates on the already-expanded input, so it tracks current salaries.
  */
 export interface LayoffGroupLever {
   kind: "layoffGroup";
   staffIds: string[];
   effectiveDate: ISODate;
-  /** Default months of pay as severance, applied per person unless overridden. */
-  severanceMonths?: number;
-  /** Per-person severance override (months of pay), keyed by staff id. */
+  /** Default weeks of pay as severance, applied per person unless overridden. */
+  severanceWeeks?: number;
+  /** Per-person severance override (weeks of pay), keyed by staff id. */
   severanceByStaff?: Record<string, number>;
   label?: string;
 }
@@ -236,8 +236,8 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
     item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
 
   for (const id of lever.staffIds) {
-    // Per-person severance months, falling back to the group default.
-    const months = lever.severanceByStaff?.[id] ?? lever.severanceMonths ?? 0;
+    // Per-person severance weeks, falling back to the group default.
+    const weeks = lever.severanceByStaff?.[id] ?? lever.severanceWeeks ?? 0;
     const prefix = `staff:${id}:`;
     let monthlyAtLayoff = 0;
     for (const item of input.recurring!) {
@@ -246,13 +246,14 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
       // Stop the pay at the layoff date (never extend an earlier end).
       item.endDate = item.endDate && item.endDate < cutoff ? item.endDate : cutoff;
     }
-    if (months > 0 && monthlyAtLayoff > 0) {
+    const weeklyAtLayoff = (monthlyAtLayoff * 12) / 52;
+    if (weeks > 0 && weeklyAtLayoff > 0) {
       input.events!.push({
         id: `layoff-sev:${id}`,
         category: "payroll",
-        amount: monthlyAtLayoff * months,
+        amount: weeklyAtLayoff * weeks,
         date: lever.effectiveDate,
-        memo: `Severance (${months}mo)`,
+        memo: `Severance (${weeks}wk)`,
       });
     }
   }
