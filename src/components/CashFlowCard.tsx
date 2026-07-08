@@ -35,12 +35,6 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
 
   const accountCount = result.bankAccounts.filter((a) => a.operating !== false).length;
 
-  const lowest = useMemo(() => {
-    let min = result.periods[0];
-    for (const p of result.periods) if (p.endingBalance < (min?.endingBalance ?? Infinity)) min = p;
-    return min ? { amount: min.endingBalance, date: min.period.end } : null;
-  }, [result]);
-
   const breach = useMemo(() => {
     const p = result.periods.find((pp) => pp.endingBalance < threshold);
     if (!p) return null;
@@ -101,14 +95,6 @@ export function CashFlowCard({ view, onView, result, overlays, rangeOptions, ran
             sub={breach ? fmtShortDate(breach.date) : "stays above the floor"}
             neg={!!breach}
           />
-          {lowest && (
-            <Stat
-              name="Lowest balance"
-              date={fmtShortDate(lowest.date)}
-              value={fmtMoney(lowest.amount)}
-              neg={lowest.amount < 0}
-            />
-          )}
         </div>
 
         <CashChart series={series} threshold={threshold} overlays={overlays} todayLabel="today" />
