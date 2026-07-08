@@ -24,7 +24,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { staffToPayroll, type CashEvent, type ForecastInput, type Scenario } from "@engine/index.js";
+import {
+  isValidISODate,
+  staffToPayroll,
+  type CashEvent,
+  type ForecastInput,
+  type Scenario,
+  type StaffMember,
+} from "@engine/index.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
@@ -278,7 +285,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // `payroll` recurring items, plus a one-off severance disbursement on each
   // termination date. No roster → the manual payroll line stands.
   const staffBase = useMemo<ForecastInput>(() => {
-    const staff = state.input.staff ?? [];
+    // Sanitize before touching the engine: a member is only expandable once its
+    // hire date is a complete, valid YYYY-MM-DD. While someone types a date by
+    // hand the field is briefly incomplete, so skip those rows (they stay
+    // editable) rather than feeding "" to the date math, which would throw.
+    const staff = (state.input.staff ?? [])
+      .filter((m) => isValidISODate(m.doh))
+      .map((m): StaffMember => ({
+        ...m,
+        dot: m.dot && isValidISODate(m.dot) ? m.dot : undefined,
+        salaryChangeDate:
+          m.salaryChangeDate && isValidISODate(m.salaryChangeDate) ? m.salaryChangeDate : undefined,
+      }));
     if (staff.length === 0) return state.input;
 
     const payroll = staffToPayroll(staff, {
