@@ -9,7 +9,7 @@
 export * from "./dates.js";
 export * from "./types.js";
 export { buildPeriods, periodIndexForDate } from "./periods.js";
-export { expandRecurring, pipelineToEvent } from "./events.js";
+export { expandRecurring, pipelineToEvent, pipelineToEvents } from "./events.js";
 export {
   forecast,
   collectEvents,

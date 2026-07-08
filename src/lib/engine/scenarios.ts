@@ -204,8 +204,15 @@ function applyPipelineSensitivity(input: ForecastInput, lever: PipelineSensitivi
   const slip = lever.slipDays ?? 0;
   input.pipeline = input.pipeline!.map((deal) => ({
     ...deal,
-    probability: clamp01(deal.probability * mult),
-    expectedCloseDate: slip !== 0 ? addDays(deal.expectedCloseDate, slip) : deal.expectedCloseDate,
+    // Scale win rate (legacy deals only) and slip both the legacy close date
+    // and every scheduled billing.
+    probability: deal.probability !== undefined ? clamp01(deal.probability * mult) : deal.probability,
+    expectedCloseDate:
+      slip !== 0 && deal.expectedCloseDate ? addDays(deal.expectedCloseDate, slip) : deal.expectedCloseDate,
+    billings:
+      slip !== 0 && deal.billings
+        ? deal.billings.map((b) => ({ ...b, date: addDays(b.date, slip) }))
+        : deal.billings,
   }));
 }
 

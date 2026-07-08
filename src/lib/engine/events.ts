@@ -3,7 +3,7 @@
  * dated `CashEvent`s so the projection only ever deals with one flat list.
  */
 
-import { addDays, addMonths, addWeeks, isOnOrBefore, type ISODate } from "./dates.js";
+import { addDays, addMonths, addWeeks, isOnOrBefore, isValidISODate, type ISODate } from "./dates.js";
 import type { CashEvent, PipelineDeal, RecurringItem } from "./types.js";
 
 /**
@@ -87,11 +87,33 @@ export function pipelineToEvent(deal: PipelineDeal): CashEvent {
   return {
     id: deal.id,
     category: "pipeline",
-    amount: deal.value,
-    date: addDays(deal.expectedCloseDate, deal.collectionLagDays),
-    probability: clampProbability(deal.probability),
+    amount: deal.value ?? 0,
+    date: addDays(deal.expectedCloseDate ?? "", deal.collectionLagDays ?? 0),
+    probability: clampProbability(deal.probability ?? 1),
     memo: deal.name,
   };
+}
+
+/**
+ * Expand a deal into its receipt events. A `billings` schedule produces one
+ * receipt per installment (each on its own date); otherwise it falls back to
+ * the single legacy receipt. Installments/deals with an incomplete date are
+ * skipped so the caller never feeds malformed dates to the period math.
+ */
+export function pipelineToEvents(deal: PipelineDeal): CashEvent[] {
+  if (deal.billings && deal.billings.length > 0) {
+    return deal.billings
+      .filter((b) => isValidISODate(b.date))
+      .map((b, i) => ({
+        id: `${deal.id}:b${i}`,
+        category: "pipeline",
+        amount: b.amount,
+        date: b.date,
+        memo: deal.name,
+      }));
+  }
+  if (!deal.expectedCloseDate || !isValidISODate(deal.expectedCloseDate)) return [];
+  return [pipelineToEvent(deal)];
 }
 
 function clampProbability(p: number): number {

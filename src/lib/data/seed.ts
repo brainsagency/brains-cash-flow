@@ -39,8 +39,27 @@ export const SEED_INPUT: ForecastInput = {
     { id: "dist", category: "otherWithdrawals", amount: 75_000, date: "2026-10-01", memo: "Owner distribution (sample)" },
   ],
   pipeline: [
-    { id: "p1", name: "New logo — Q3", value: 240_000, probability: 0.4, expectedCloseDate: "2026-08-15", collectionLagDays: 45 },
-    { id: "p2", name: "Expansion — retainer", value: 180_000, probability: 0.6, expectedCloseDate: "2026-09-01", collectionLagDays: 30 },
+    {
+      id: "p1",
+      name: "New logo — Q3 (sample)",
+      enabled: false,
+      billings: [
+        { date: "2026-09-01", amount: 60_000 },
+        { date: "2026-10-01", amount: 60_000 },
+        { date: "2026-11-01", amount: 60_000 },
+        { date: "2026-12-01", amount: 60_000 },
+      ],
+    },
+    {
+      id: "p2",
+      name: "Expansion — retainer (sample)",
+      enabled: false,
+      billings: [
+        { date: "2026-10-01", amount: 60_000 },
+        { date: "2026-11-01", amount: 60_000 },
+        { date: "2026-12-01", amount: 60_000 },
+      ],
+    },
   ],
   includePipeline: false,
   includeBudgeted: false,

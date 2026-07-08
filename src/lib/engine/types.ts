@@ -138,18 +138,37 @@ export interface StaffMember {
   costCenter?: string;
 }
 
-/** A CRM deal, converted to a probability-weighted receipt on close + lag. */
+/** One scheduled cash receipt for a deal (a billing / installment). */
+export interface Billing {
+  /** Date the cash is expected to land. */
+  date: ISODate;
+  /** Amount of this installment. */
+  amount: number;
+}
+
+/**
+ * A new-business opportunity. Cash is recognized either as an explicit
+ * `billings` schedule (the primary path — projects usually bill in 3–4
+ * installments over several months) or, for legacy/CRM deals, as a single
+ * probability-weighted receipt on `expectedCloseDate + collectionLagDays`.
+ */
 export interface PipelineDeal {
   id: string;
   name: string;
-  /** Total contract / booking value. */
-  value: number;
-  /** Win probability 0..1 (from CRM stage/probability). */
-  probability: number;
-  /** Expected close date (from CRM). */
-  expectedCloseDate: ISODate;
-  /** Days from close until cash collected (payment terms + collection lag). */
-  collectionLagDays: number;
+  /**
+   * Billing schedule: each installment lands as its own receipt on its date.
+   * When present, this is authoritative and the legacy value/close/lag fields
+   * are ignored.
+   */
+  billings?: Billing[];
+  /** Total contract / booking value (legacy single-receipt path). */
+  value?: number;
+  /** Win probability 0..1 (legacy path). Defaults to 1 when unset. */
+  probability?: number;
+  /** Expected close date (legacy path). */
+  expectedCloseDate?: ISODate;
+  /** Days from close until cash collected (legacy path). */
+  collectionLagDays?: number;
   /**
    * Per-deal toggle. `true` counts this deal regardless of the global
    * `includePipeline`; `false` never counts it. When unset, the deal follows

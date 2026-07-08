@@ -1,32 +1,41 @@
 "use client";
 
-import { addDays, isValidISODate, type ForecastInput, type PipelineDeal } from "@engine/index.js";
+import { useState } from "react";
+import { addMonths, isValidISODate, type Billing, type ForecastInput, type PipelineDeal } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
 
 /**
  * New Business — pipeline opportunities you can toggle on/off to see their
- * probability-weighted revenue flow through the forecast. Each enabled deal
- * lands as a receipt of `value × win%` on `expected close + collection lag`.
+ * revenue flow through the forecast. This is a play feature, so there's no win
+ * probability: an enabled deal contributes its billing schedule as-is.
  *
- * Today the list is manual (add your own to play with potential revenue). The
- * intent is to wire this to the CRM so open opportunities show up here ready to
- * flip on; until then "Connect CRM" is a placeholder.
+ * Cash recognition is a schedule of billings (projects usually bill in 3–4
+ * installments over a few months). Each enabled billing lands as a receipt on
+ * its date. A quick-split helper spreads a total across N monthly billings.
+ *
+ * Today the list is manual; the intent is to wire this to the CRM so open
+ * opportunities show up ready to flip on ("Connect CRM" is a placeholder).
  */
 
-/** A deal counts when explicitly enabled (the panel always sets it explicitly). */
 function isOn(d: PipelineDeal): boolean {
   return d.enabled === true;
 }
+function dealTotal(d: PipelineDeal): number {
+  return (d.billings ?? []).reduce((s, b) => s + (b.amount || 0), 0);
+}
 
-function weighted(d: PipelineDeal): number {
-  return d.value * Math.max(0, Math.min(1, d.probability || 0));
+interface FillDraft {
+  total: number;
+  count: number;
+  start: string;
 }
 
 export function NewBusiness() {
   const { input, setInput } = useStore();
   const deals = input.pipeline ?? [];
   const anchor = input.anchorDate;
+  const [fill, setFill] = useState<Record<string, FillDraft>>({});
 
   const write = (next: PipelineDeal[]) => setInput((prev: ForecastInput) => ({ ...prev, pipeline: next }));
   const update = (i: number, patch: Partial<PipelineDeal>) =>
@@ -38,36 +47,57 @@ export function NewBusiness() {
       {
         id: `deal-${Date.now()}`,
         name: "",
-        value: 100_000,
-        probability: 0.5,
-        expectedCloseDate: addDays(anchor, 30),
-        collectionLagDays: 30,
         enabled: true,
+        billings: [{ date: addMonths(anchor, 1), amount: 50_000 }],
       },
     ]);
 
-  const enabled = deals.filter(isOn);
-  const weightedTotal = enabled.reduce((s, d) => s + weighted(d), 0);
-  const grossTotal = enabled.reduce((s, d) => s + d.value, 0);
+  const setBillings = (i: number, billings: Billing[]) => update(i, { billings });
+  const updateBilling = (i: number, bi: number, patch: Partial<Billing>) =>
+    setBillings(i, (deals[i]!.billings ?? []).map((b, idx) => (idx === bi ? { ...b, ...patch } : b)));
+  const addBilling = (i: number) => {
+    const bs = deals[i]!.billings ?? [];
+    const last = bs[bs.length - 1];
+    const nextDate = last && isValidISODate(last.date) ? addMonths(last.date, 1) : addMonths(anchor, 1);
+    setBillings(i, [...bs, { date: nextDate, amount: 0 }]);
+  };
+  const removeBilling = (i: number, bi: number) =>
+    setBillings(i, (deals[i]!.billings ?? []).filter((_, idx) => idx !== bi));
 
-  const COLS = "auto 1.7fr 1fr 0.7fr 1.1fr 0.8fr 1.1fr auto";
+  const draftFor = (d: PipelineDeal): FillDraft =>
+    fill[d.id] ?? { total: dealTotal(d) || 100_000, count: d.billings?.length || 3, start: addMonths(anchor, 1) };
+  const setDraft = (id: string, patch: Partial<FillDraft>) =>
+    setFill((prev) => ({ ...prev, [id]: { ...draftFor(deals.find((d) => d.id === id)!), ...prev[id], ...patch } }));
+
+  // Spread `total` across `count` equal monthly billings from `start`; the last
+  // installment absorbs any rounding remainder so the schedule sums exactly.
+  const generate = (i: number) => {
+    const d = deals[i]!;
+    const { total, count, start } = draftFor(d);
+    const n = Math.max(1, Math.floor(count) || 1);
+    if (!isValidISODate(start)) return;
+    const per = Math.round(total / n);
+    const billings: Billing[] = Array.from({ length: n }, (_, k) => ({
+      date: addMonths(start, k),
+      amount: k === n - 1 ? total - per * (n - 1) : per,
+    }));
+    setBillings(i, billings);
+  };
+
+  const enabled = deals.filter(isOn);
+  const scheduledTotal = enabled.reduce((s, d) => s + dealTotal(d), 0);
 
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0, textTransform: "none", fontSize: 16, color: "var(--text)" }}>New Business</h2>
         <div className="spacer" />
-        <span className="pill-total mono">{fmtMoney(weightedTotal)} weighted</span>
+        <span className="pill-total mono">{fmtMoney(scheduledTotal)} scheduled</span>
       </div>
       <div className="muted" style={{ marginBottom: 14 }}>
-        Toggle opportunities on to flow their <b>probability-weighted</b> revenue into the forecast — each enabled deal
-        lands as {"value × win%"} on its expected close date plus collection lag.{" "}
-        {enabled.length > 0 && (
-          <>
-            {enabled.length} on ·{" "}
-            <span className="mono">{fmtMoney(grossTotal)}</span> gross pipeline.
-          </>
-        )}
+        Toggle opportunities on to flow their revenue into the forecast. Cash is recognized on a billing schedule —
+        set each installment&apos;s date and amount, or use quick-split to spread a total across a few monthly billings.
+        {enabled.length > 0 && ` ${enabled.length} on.`}
       </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
@@ -83,88 +113,126 @@ export function NewBusiness() {
         <div className="muted">No opportunities yet — add one above to model potential new revenue.</div>
       )}
 
-      {deals.length > 0 && (
-        <>
+      {deals.map((d, i) => {
+        const on = isOn(d);
+        const bs = d.billings ?? [];
+        const draft = draftFor(d);
+        return (
           <div
+            key={d.id}
             style={{
-              display: "grid",
-              gridTemplateColumns: COLS,
-              gap: 8,
-              marginBottom: 6,
-              fontSize: 12,
-              color: "var(--text-dim)",
-              alignItems: "end",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: "12px 14px",
+              marginBottom: 10,
+              opacity: on ? 1 : 0.6,
             }}
           >
-            <span>On</span>
-            <span>Opportunity</span>
-            <span>Value</span>
-            <span>Win %</span>
-            <span>Expected close</span>
-            <span>Lag (days)</span>
-            <span>Expected cash</span>
-            <span />
-          </div>
+            <div className="row" style={{ gap: 10, marginBottom: 10, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={(e) => update(i, { enabled: e.target.checked })}
+                title={on ? "Included in forecast" : "Excluded from forecast"}
+              />
+              <input
+                value={d.name}
+                placeholder="Opportunity name — e.g. New logo, Q3"
+                onChange={(e) => update(i, { name: e.target.value })}
+                style={{ flex: 1 }}
+              />
+              <span className="mono" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+                {fmtMoney(dealTotal(d))}
+              </span>
+              <button className="btn sm ghost" onClick={() => remove(i)} title="Remove opportunity">
+                ✕
+              </button>
+            </div>
 
-          {deals.map((d, i) => {
-            const on = isOn(d);
-            const validDate = isValidISODate(d.expectedCloseDate);
-            const cashDate = validDate ? addDays(d.expectedCloseDate, d.collectionLagDays || 0) : null;
-            return (
-              <div
-                key={d.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: COLS,
-                  gap: 8,
-                  alignItems: "center",
-                  marginBottom: 8,
-                  opacity: on ? 1 : 0.55,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={(e) => update(i, { enabled: e.target.checked })}
-                  title={on ? "Included in forecast" : "Excluded from forecast"}
-                />
-                <input value={d.name} placeholder="e.g. New logo — Q3" onChange={(e) => update(i, { name: e.target.value })} />
+            {/* Billing schedule */}
+            <div style={{ paddingLeft: 26 }}>
+              {bs.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr auto",
+                    gap: 8,
+                    fontSize: 12,
+                    color: "var(--text-dim)",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>Billing date</span>
+                  <span>Amount</span>
+                  <span />
+                </div>
+              )}
+              {bs.map((b, bi) => (
+                <div
+                  key={bi}
+                  style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginBottom: 6 }}
+                >
+                  <input type="date" value={b.date} onChange={(e) => updateBilling(i, bi, { date: e.target.value })} />
+                  <input
+                    type="number"
+                    step="1000"
+                    value={b.amount}
+                    onChange={(e) => updateBilling(i, bi, { amount: Number(e.target.value) })}
+                  />
+                  <button className="btn sm ghost" onClick={() => removeBilling(i, bi)} title="Remove billing">
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              <div className="row" style={{ gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn sm ghost" onClick={() => addBilling(i)}>
+                  + Billing
+                </button>
+                <span className="muted" style={{ margin: "0 4px" }}>
+                  or quick-split
+                </span>
                 <input
                   type="number"
                   step="1000"
-                  value={d.value}
-                  onChange={(e) => update(i, { value: Number(e.target.value) })}
+                  value={draft.total}
+                  onChange={(e) => setDraft(d.id, { total: Number(e.target.value) })}
+                  title="Total value"
+                  style={{ width: 110 }}
                 />
+                <span className="muted">into</span>
                 <input
                   type="number"
-                  min={0}
-                  max={100}
-                  value={Math.round((d.probability || 0) * 100)}
-                  onChange={(e) => update(i, { probability: Math.max(0, Math.min(100, Number(e.target.value))) / 100 })}
+                  min={1}
+                  max={12}
+                  value={draft.count}
+                  onChange={(e) => setDraft(d.id, { count: Number(e.target.value) })}
+                  title="Number of billings"
+                  style={{ width: 56 }}
                 />
+                <span className="muted">billings, monthly from</span>
                 <input
                   type="date"
-                  value={d.expectedCloseDate}
-                  onChange={(e) => update(i, { expectedCloseDate: e.target.value })}
+                  value={draft.start}
+                  onChange={(e) => setDraft(d.id, { start: e.target.value })}
+                  style={{ width: 150 }}
                 />
-                <input
-                  type="number"
-                  min={0}
-                  value={d.collectionLagDays}
-                  onChange={(e) => update(i, { collectionLagDays: Number(e.target.value) })}
-                />
-                <span className="mono" style={{ fontSize: 13 }}>
-                  {fmtMoney(weighted(d))}
-                  {cashDate && <span className="muted"> · {fmtShortDate(cashDate)}</span>}
-                </span>
-                <button className="btn sm ghost" onClick={() => remove(i)} title="Remove">
-                  ✕
+                <button className="btn sm" onClick={() => generate(i)}>
+                  Generate
                 </button>
               </div>
-            );
-          })}
-        </>
-      )}
+
+              {on && bs.some((b) => isValidISODate(b.date)) && (
+                <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                  First cash {fmtShortDate(bs.filter((b) => isValidISODate(b.date)).map((b) => b.date).sort()[0]!)} ·{" "}
+                  {bs.filter((b) => isValidISODate(b.date)).length} billing
+                  {bs.filter((b) => isValidISODate(b.date)).length === 1 ? "" : "s"}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
