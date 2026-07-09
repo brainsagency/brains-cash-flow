@@ -194,10 +194,7 @@ export function OperatingExpenses() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Hero */}
-      <div style={{ ...CARD, position: "relative", display: "flex", gap: 36, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <button className={`btn sm ${editing ? "primary" : ""}`} onClick={() => setEditing((v) => !v)} style={{ position: "absolute", top: 16, right: 18 }}>
-          {editing ? "Done editing" : "Edit amounts"}
-        </button>
+      <div style={{ ...CARD, display: "flex", gap: 36, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div>
           <Eyebrow>Monthly run-rate</Eyebrow>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 8 }}>
@@ -210,10 +207,16 @@ export function OperatingExpenses() {
         {chip("Cards", money0(cardsBudget) + "/mo")}
       </div>
 
-      <p style={{ fontSize: 14, color: "#4a4a4a", lineHeight: 1.5, margin: 0, maxWidth: 820 }}>
-        Recurring operating costs only. Payroll lives on the Staff Roster, and anything paid through Bill.com — like
-        rent — or on a card statement belongs to that feed, so nothing is double-counted.
-      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <p style={{ fontSize: 14, color: "#4a4a4a", lineHeight: 1.5, margin: 0, maxWidth: 720 }}>
+          Recurring operating costs only. Payroll lives on the Staff Roster, and anything paid through Bill.com — like
+          rent — or on a card statement belongs to that feed, so nothing is double-counted.
+        </p>
+        <div style={{ flex: 1 }} />
+        <button className={`btn sm ${editing ? "primary" : ""}`} onClick={() => setEditing((v) => !v)} style={{ flex: "0 0 auto" }}>
+          {editing ? "Done editing" : "Edit amounts"}
+        </button>
+      </div>
 
       {/* Company cards */}
       <div style={CARD}>
