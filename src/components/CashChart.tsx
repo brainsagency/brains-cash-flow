@@ -28,8 +28,10 @@ interface Props {
 const VBW = 900;
 const VBH = 320;
 const PAD = { top: 18, right: 18, bottom: 34, left: 62 };
-const GRID = "#eceef1";
-const AXIS = "#93a0aa";
+const GRID = "rgba(19,19,19,0.07)";
+const AXIS = "#7a7a7a";
+const RED = "#b4342a";
+const COND = "'Barlow Condensed', system-ui, sans-serif";
 
 export function CashChart({ series, threshold, overlays = [], todayLabel }: Props) {
   const [hover, setHover] = useState<number | null>(null);
@@ -67,19 +69,6 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
   const stepArea = (pts: ChartPoint[]) =>
     `${stepLine(pts)} L${x(pts.length - 1).toFixed(1)},${baseY.toFixed(1)} L${x(0).toFixed(1)},${baseY.toFixed(1)} Z`;
 
-  // Contiguous spans where the balance is below the threshold → red bands.
-  const half = n > 1 ? plotW / (n - 1) / 2 : plotW / 2;
-  const dangerBands: Array<{ x0: number; x1: number }> = [];
-  for (let i = 0; i < n; i++) {
-    if (series[i]!.ending < threshold) {
-      const x0 = x(i) - half;
-      const x1 = x(i) + half;
-      const last = dangerBands[dangerBands.length - 1];
-      if (last && x0 <= last.x1 + 0.5) last.x1 = x1;
-      else dangerBands.push({ x0: Math.max(PAD.left, x0), x1: Math.min(VBW - PAD.right, x1) });
-    }
-  }
-
   const ticks = 4;
   const gridVals = Array.from({ length: ticks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / ticks);
   const labelStep = Math.max(1, Math.ceil(n / 7));
@@ -116,10 +105,10 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
           </linearGradient>
         </defs>
 
-        {/* danger bands (below threshold) */}
-        {dangerBands.map((b, i) => (
-          <rect key={i} x={b.x0} y={PAD.top} width={Math.max(0, b.x1 - b.x0)} height={plotH} fill="#d84a4a" fillOpacity={0.07} />
-        ))}
+        {/* danger zone: everything below $0 */}
+        {zeroInView && (
+          <rect x={PAD.left} y={y(0)} width={plotW} height={Math.max(0, baseY - y(0))} fill={RED} fillOpacity={0.05} />
+        )}
 
         {/* gridlines + y labels */}
         {gridVals.map((v, i) => (
@@ -131,21 +120,12 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
           </g>
         ))}
 
-        {/* threshold line + boxed label */}
-        <line x1={PAD.left} y1={y(threshold)} x2={VBW - PAD.right} y2={y(threshold)} stroke="#d84a4a" strokeWidth={1.1} strokeDasharray="2 3" strokeOpacity={0.7} />
-        <g>
-          <rect x={PAD.left - 52} y={y(threshold) - 9} width={48} height={18} rx={4} fill="#16232b" />
-          <text x={PAD.left - 28} y={y(threshold) + 4} textAnchor="middle" fontSize={10.5} fill="#fff">
-            {fmtMoneyShort(threshold)}
-          </text>
-        </g>
-
         {/* $0 reference line + boxed label */}
         {zeroInView && (
           <g>
-            <line x1={PAD.left} y1={y(0)} x2={VBW - PAD.right} y2={y(0)} stroke="#16232b" strokeWidth={1.2} strokeOpacity={0.55} />
-            <rect x={PAD.left - 52} y={y(0) - 9} width={48} height={18} rx={4} fill="#d84a4a" />
-            <text x={PAD.left - 28} y={y(0) + 4} textAnchor="middle" fontSize={10.5} fill="#fff">
+            <line x1={PAD.left} y1={y(0)} x2={VBW - PAD.right} y2={y(0)} stroke="rgba(19,19,19,0.30)" strokeWidth={1.2} />
+            <rect x={PAD.left - 48} y={y(0) - 11} width={40} height={22} rx={5} fill={RED} />
+            <text x={PAD.left - 28} y={y(0) + 4} textAnchor="middle" fontSize={11.5} fill="#fff">
               $0
             </text>
           </g>
@@ -163,19 +143,18 @@ export function CashChart({ series, threshold, overlays = [], todayLabel }: Prop
         {/* cash-out marker: first period the balance goes below $0 */}
         {cashOutIdx > 0 && (
           <g>
-            <line x1={x(cashOutIdx)} y1={PAD.top} x2={x(cashOutIdx)} y2={baseY} stroke="#d84a4a" strokeWidth={1.4} strokeDasharray="4 3" />
-            <text x={x(cashOutIdx) - 5} y={PAD.top + 11} textAnchor="end" fontSize={10.5} fill="#d84a4a">
-              cash-out
+            <line x1={x(cashOutIdx)} y1={PAD.top} x2={x(cashOutIdx)} y2={baseY} stroke={RED} strokeWidth={1.2} strokeDasharray="4 4" strokeOpacity={0.85} />
+            <text x={x(cashOutIdx) + 5} y={PAD.top + 3} fontSize={11} fill={RED} style={{ fontFamily: COND, fontWeight: 700, letterSpacing: ".08em" }}>
+              CASH-OUT
             </text>
           </g>
         )}
 
         {/* today marker (start of forecast) */}
-        <line x1={x(0)} y1={PAD.top} x2={x(0)} y2={baseY} stroke="#d84a4a" strokeWidth={1.4} />
-        <circle cx={x(0)} cy={PAD.top} r={3.5} fill="#d84a4a" />
+        <line x1={x(0)} y1={PAD.top - 4} x2={x(0)} y2={baseY} stroke={RED} strokeWidth={1.4} />
         {todayLabel && (
-          <text x={x(0) + 5} y={PAD.top + 2} fontSize={10.5} fill="#d84a4a">
-            today
+          <text x={x(0) + 5} y={PAD.top + 3} fontSize={11} fill={RED} style={{ fontFamily: COND, fontWeight: 700, letterSpacing: ".08em" }}>
+            TODAY
           </text>
         )}
 

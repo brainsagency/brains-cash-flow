@@ -22,7 +22,6 @@ import { BillPanel } from "@/components/BillPanel.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder.js";
-import { ScenarioMenu } from "@/components/ScenarioMenu.js";
 import type { Scenario } from "@engine/index.js";
 
 const WEEK_RANGES: RangeOption[] = [
@@ -182,16 +181,7 @@ export default function Dashboard() {
         )}
 
         {nav === "cashflow" && (
-          <div className="grid" style={{ gap: 16 }}>
-            <div className="row" style={{ justifyContent: "flex-end" }}>
-              <ScenarioMenu
-                scenarios={scenarios}
-                selectedIds={selectedIds}
-                colorFor={colorFor}
-                onToggle={toggle}
-                onCreate={() => setBuilder("new")}
-              />
-            </div>
+          <div className="grid" style={{ gap: 22 }}>
             <CashFlowCard
               view={view}
               onView={setView}
@@ -200,6 +190,11 @@ export default function Dashboard() {
               rangeOptions={view === "week" ? WEEK_RANGES : MONTH_RANGES}
               rangeValue={view === "week" ? weekRange : monthRange}
               onRange={view === "week" ? setWeekRange : setMonthRange}
+              scenarios={scenarios}
+              selectedIds={selectedIds}
+              colorFor={colorFor}
+              onToggleScenario={toggle}
+              onCreateScenario={() => setBuilder("new")}
             />
             <CashMatrix result={active} view={view} />
             <NewBusiness />
