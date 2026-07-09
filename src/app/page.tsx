@@ -157,15 +157,19 @@ export default function Dashboard() {
     <div className="layout">
       <Sidebar active={nav} onSelect={setNav} />
       <main className="main">
-        <header className="topbar">
-          <div>
-            <div className="eyebrow">{pageEyebrow}</div>
-            <h1>{pageTitle}</h1>
-            <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
-          </div>
-          {nav === "invoices" && <SyncPill kind="qbo" />}
-          {nav === "bills" && <SyncPill kind="bill" />}
-        </header>
+        {/* The landing (Cash Flow) view needs no page header — the card speaks
+            for itself. Every other view keeps the eyebrow + title. */}
+        {nav !== "cashflow" && (
+          <header className="topbar">
+            <div>
+              <div className="eyebrow">{pageEyebrow}</div>
+              <h1>{pageTitle}</h1>
+              <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
+            </div>
+            {nav === "invoices" && <SyncPill kind="qbo" />}
+            {nav === "bills" && <SyncPill kind="bill" />}
+          </header>
+        )}
 
         {stale.length > 0 && (
           <div className="alert critical" style={{ marginBottom: 16 }}>
