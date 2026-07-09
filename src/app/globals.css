@@ -90,6 +90,7 @@ select {
   position: sticky;
   top: 0;
   height: 100vh;
+  transition: width 0.18s ease;
 }
 .sidebar .brand {
   display: flex;
@@ -101,6 +102,50 @@ select {
   letter-spacing: 0.01em;
   padding: 6px 8px 12px;
 }
+.sidebar .brand .brand-name {
+  margin-right: auto;
+}
+.collapse-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  flex: none;
+}
+.collapse-btn:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+.collapse-btn svg {
+  width: 16px;
+  height: 16px;
+}
+/* Collapsed rail */
+.sidebar.collapsed {
+  width: 68px;
+}
+.sidebar.collapsed .brand {
+  justify-content: center;
+  padding: 6px 0 12px;
+  gap: 0;
+}
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 11px 0;
+}
+.sidebar.collapsed .nav-item span {
+  display: none;
+}
+.sidebar.collapsed .sidebar-footer {
+  justify-content: center;
+  padding: 9px 0;
+}
 .sidebar .brand .logo {
   width: 22px;
   height: 22px;
@@ -111,27 +156,6 @@ select {
   place-items: center;
   font-size: 13px;
   font-weight: 800;
-}
-.company {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.company .sq {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
 }
 .sidebar-nav {
   display: flex;
@@ -210,7 +234,6 @@ select {
     gap: 6px;
   }
   .sidebar .brand,
-  .company,
   .sidebar-footer {
     display: none;
   }

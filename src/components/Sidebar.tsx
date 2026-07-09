@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export type ViewKey =
   | "cashflow"
@@ -24,15 +24,20 @@ export const NAV: Array<{ key: ViewKey; label: string; title: string; eyebrow: s
 ];
 
 export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: ViewKey) => void }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="brand">
         <span className="logo">B</span>
-        Brains
-      </div>
-      <div className="company">
-        <span className="sq">🏢</span>
-        Brains Agency
+        {!collapsed && <span className="brand-name">Brains</span>}
+        <button
+          className="collapse-btn"
+          onClick={() => setCollapsed((v) => !v)}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <IconChevron dir={collapsed ? "right" : "left"} />
+        </button>
       </div>
       <nav className="sidebar-nav">
         {NAV.map((item) => (
@@ -40,6 +45,7 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
             key={item.key}
             className={`nav-item ${active === item.key ? "active" : ""}`}
             onClick={() => onSelect(item.key)}
+            title={collapsed ? item.label : undefined}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -48,12 +54,20 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
       </nav>
       <div className="sidebar-footer">
         <span className="avatar">GD</span>
-        <span>Gustavo Delgado</span>
-        <div className="spacer" />
-        <a className="btn sm ghost" href="/api/auth/logout" title="Lock / sign out">🔒</a>
+        {!collapsed && (
+          <>
+            <span className="fname">Gustavo Delgado</span>
+            <div className="spacer" />
+            <a className="btn sm ghost" href="/api/auth/logout" title="Lock / sign out">🔒</a>
+          </>
+        )}
       </div>
     </aside>
   );
+}
+
+function IconChevron({ dir }: { dir: "left" | "right" }) {
+  return svg(dir === "left" ? <path d="M15 6l-6 6 6 6" /> : <path d="M9 6l6 6-6 6" />);
 }
 
 /* ---- minimal stroke icons (18px, currentColor) ---- */
