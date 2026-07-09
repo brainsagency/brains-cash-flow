@@ -1,27 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import type { CashCategory, RecurringFrequency, RecurringItem } from "@engine/index.js";
+import type { CashEvent, RecurringFrequency, RecurringItem } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
-import { fmtMoney } from "@/lib/format.js";
+import { fmtMoney, fmtShortDate } from "@/lib/format.js";
 import { MoneyInput } from "@/components/fields.js";
 
 /**
- * Editor for recurring operating costs.
+ * Editor for operating costs.
  *
  * AmEx (category "amex") is the headline variable expense, so it gets its own
  * section with a month-by-month grid: budget a monthly placeholder, then fill
- * in the actual as each month closes (a blank month uses the budget). The
- * plain operating expenses (category "operatingExpense") are a simple list
- * below.
+ * in the actual as each month closes (a blank month uses the budget). Plain
+ * recurring operating expenses (category "operatingExpense") are a list below,
+ * and one-time expenses (a conference, a one-off purchase paid directly) are
+ * dated operatingExpense events.
  *
- * Bills paid through Bill.com (e.g. rent) belong in the AP feed, not here —
- * adding them would double-count.
+ * Bills paid through Bill.com, or anything that lands on the AmEx statement,
+ * belong to those feeds — don't re-enter here or it double-counts.
  */
 
 const OPEX = "operatingExpense" as const;
 const AMEX = "amex" as const;
-const MANAGED = new Set<CashCategory>([OPEX, AMEX]);
 
 const FREQ_LABEL: Record<RecurringFrequency, string> = {
   weekly: "Weekly",
@@ -84,8 +84,12 @@ export function OperatingExpenses() {
   const all = input.recurring ?? [];
   const opex = all.filter((r) => r.category === OPEX);
   const amex = all.filter((r) => r.category === AMEX);
+  // One-time expenses are dated operatingExpense events.
+  const oneoffs = (input.events ?? [])
+    .filter((e) => e.category === OPEX)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-  // All writes rebuild the recurring array, preserving non-managed items.
+  // Recurring writes rebuild the recurring array, preserving non-managed items.
   const updateItem = (id: string | undefined, patch: Partial<RecurringItem>) =>
     setInput((prev) => ({
       ...prev,
@@ -110,6 +114,23 @@ export function OperatingExpenses() {
       ],
     }));
 
+  // One-time (event) writes, preserving all other events.
+  const updateEvent = (id: string | undefined, patch: Partial<CashEvent>) =>
+    setInput((prev) => ({
+      ...prev,
+      events: (prev.events ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    }));
+  const removeEvent = (id: string | undefined) =>
+    setInput((prev) => ({ ...prev, events: (prev.events ?? []).filter((e) => e.id !== id) }));
+  const addOneoff = () =>
+    setInput((prev) => ({
+      ...prev,
+      events: [
+        ...(prev.events ?? []),
+        { id: `opex1-${Date.now()}`, category: OPEX, amount: 0, date: anchor, basis: "committed", memo: "" },
+      ],
+    }));
+
   const setOverride = (item: RecurringItem, ym: string, raw: string) => {
     const ov = { ...(item.overrides ?? {}) };
     if (raw === "") delete ov[ym];
@@ -120,17 +141,22 @@ export function OperatingExpenses() {
   const months = monthsFrom(anchor, 12);
   const monthlyTotal =
     opex.reduce((s, it) => s + monthlyEquivalent(it), 0) + amex.reduce((s, it) => s + it.amount, 0);
+  const oneoffTotal = oneoffs.reduce((s, e) => s + e.amount, 0);
+  const canEdit = opex.length > 0 || oneoffs.length > 0;
 
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0, textTransform: "none", fontSize: 16, color: "var(--text)" }}>Operating Expenses</h2>
         <div className="spacer" />
-        <span className="pill-total mono">{fmtMoney(monthlyTotal)}/mo</span>
+        <span className="pill-total mono" style={{ marginRight: canEdit ? 10 : 0 }}>{fmtMoney(monthlyTotal)}/mo</span>
+        {canEdit && (
+          <button className="btn sm ghost" onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit"}</button>
+        )}
       </div>
       <div className="muted" style={{ marginBottom: 16 }}>
-        Recurring operating costs (payroll is on the Staff Roster). Bills paid through Bill.com — like rent — belong in
-        Bills to Pay, or they&apos;d be double-counted.
+        Recurring costs and one-time expenses (payroll is on the Staff Roster). Anything on the AmEx statement or in
+        Bill.com is tracked by those feeds — don&apos;t re-enter it here, or it double-counts.
       </div>
 
       {/* AmEx — variable, with monthly actuals */}
@@ -188,18 +214,11 @@ export function OperatingExpenses() {
         </button>
       )}
 
-      {/* Operating expenses — simple recurring list */}
-      <div className="row" style={{ marginBottom: 8 }}>
-        <div className="muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Recurring expenses</div>
-        <div className="spacer" />
-        {opex.length > 0 && (
-          <button className="btn sm ghost" onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit"}</button>
-        )}
-      </div>
+      {/* Recurring operating expenses */}
+      <div className="muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Recurring expenses</div>
 
-      {opex.length === 0 && <div className="muted" style={{ marginBottom: 12 }}>No operating expenses yet — add your first below.</div>}
+      {opex.length === 0 && <div className="muted" style={{ marginBottom: 12 }}>No recurring operating expenses yet.</div>}
 
-      {/* Read view */}
       {!editing &&
         opex.map((it) => (
           <div className="spec-row" key={it.id}>
@@ -211,7 +230,6 @@ export function OperatingExpenses() {
           </div>
         ))}
 
-      {/* Edit view */}
       {editing &&
         opex.map((it) => (
           <div
@@ -254,14 +272,62 @@ export function OperatingExpenses() {
         ))}
 
       {editing && (
-        <button className="btn sm" onClick={addOpex} style={{ marginTop: 6 }}>
-          + Add operating expense
-        </button>
+        <button className="btn sm" onClick={addOpex} style={{ marginTop: 6 }}>+ Add recurring expense</button>
       )}
       {!editing && opex.length === 0 && (
-        <button className="btn sm" onClick={() => { setEditing(true); addOpex(); }} style={{ marginTop: 6 }}>
-          + Add operating expense
-        </button>
+        <button className="btn sm" onClick={() => { setEditing(true); addOpex(); }} style={{ marginTop: 6 }}>+ Add recurring expense</button>
+      )}
+
+      {/* One-time expenses */}
+      <div className="row" style={{ marginTop: 22, marginBottom: 8 }}>
+        <div className="muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>One-time expenses</div>
+        <div className="spacer" />
+        {oneoffs.length > 0 && <span className="mono muted" style={{ fontSize: 12 }}>{fmtMoney(oneoffTotal)} total</span>}
+      </div>
+      <div className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
+        Ad-hoc costs paid directly (a conference, a one-off purchase) that aren&apos;t on AmEx or in Bill.com.
+      </div>
+
+      {oneoffs.length === 0 && !editing && <div className="muted" style={{ marginBottom: 12 }}>None scheduled.</div>}
+
+      {!editing &&
+        oneoffs.map((e) => (
+          <div className="spec-row" key={e.id}>
+            <span className="label">
+              {e.memo || <span className="muted">Unnamed</span>}
+              <span className="meta">{fmtShortDate(e.date)}</span>
+            </span>
+            <span className="val mono">{fmtMoney(e.amount, { cents: true })}</span>
+          </div>
+        ))}
+
+      {editing &&
+        oneoffs.map((e) => (
+          <div
+            key={e.id}
+            style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 8 }}
+          >
+            <div className="field">
+              <label>Expense</label>
+              <input value={e.memo ?? ""} placeholder="e.g. SXSW conference" onChange={(ev) => updateEvent(e.id, { memo: ev.target.value })} />
+            </div>
+            <div className="field">
+              <label>Date</label>
+              <input type="date" value={e.date} onChange={(ev) => updateEvent(e.id, { date: ev.target.value })} />
+            </div>
+            <div className="field">
+              <label>Amount</label>
+              <MoneyInput value={e.amount} step="0.01" onChange={(n) => updateEvent(e.id, { amount: n })} />
+            </div>
+            <button className="btn sm ghost" onClick={() => removeEvent(e.id)} title="Remove">✕</button>
+          </div>
+        ))}
+
+      {editing && (
+        <button className="btn sm" onClick={addOneoff} style={{ marginTop: 6 }}>+ Add one-time expense</button>
+      )}
+      {!editing && oneoffs.length === 0 && (
+        <button className="btn sm" onClick={() => { setEditing(true); addOneoff(); }} style={{ marginTop: 6 }}>+ Add one-time expense</button>
       )}
     </div>
   );
