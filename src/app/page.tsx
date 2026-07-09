@@ -17,7 +17,7 @@ import { OperatingExpenses } from "@/components/OperatingExpenses.js";
 import { StaffRoster } from "@/components/StaffRoster.js";
 import { NewBusiness } from "@/components/NewBusiness.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
-import { QboPanel } from "@/components/QboPanel.js";
+import { InvoicesAR } from "@/components/InvoicesAR.js";
 import { BillPanel } from "@/components/BillPanel.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
@@ -201,12 +201,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {nav === "invoices" && (
-          <div className="grid" style={{ gap: 16 }}>
-            <QboPanel />
-            <SyncedLedger kind="ar" />
-          </div>
-        )}
+        {nav === "invoices" && <InvoicesAR />}
         {nav === "bills" && (
           <div className="grid" style={{ gap: 16 }}>
             <BillPanel />
