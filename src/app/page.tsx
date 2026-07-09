@@ -18,6 +18,7 @@ import { NewBusiness } from "@/components/NewBusiness.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { InvoicesAR } from "@/components/InvoicesAR.js";
 import { BillsAP } from "@/components/BillsAP.js";
+import { SyncPill } from "@/components/SyncPill.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder.js";
@@ -156,6 +157,8 @@ export default function Dashboard() {
             <h1>{pageTitle}</h1>
             <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
           </div>
+          {nav === "invoices" && <SyncPill kind="qbo" />}
+          {nav === "bills" && <SyncPill kind="bill" />}
         </header>
 
         {stale.length > 0 && (

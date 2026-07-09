@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import type { CashEvent } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
@@ -11,14 +11,6 @@ import { fmtMoney, fmtShortDate } from "@/lib/format.js";
  * passthrough) and an expected-collection date override. Invoices are grouped
  * Overdue-first, then by due month, and filterable by status / searchable.
  */
-
-interface QboStatus {
-  configured: boolean;
-  connected: boolean;
-  environment: string;
-  realmId: string | null;
-  lastSync: { syncedAt: string; arCount: number; apCount: number; arTotal: number; apTotal: number } | null;
-}
 
 type Filter = "all" | "overdue" | "current" | "excluded";
 type Sort = "due" | "amount";
@@ -46,44 +38,14 @@ function monthFull(iso: string): string {
   const [y, mo] = iso.split("-").map(Number) as [number, number];
   return `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][(mo || 1) - 1]} ${y}`;
 }
-function timeShort(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return iso;
-  }
-}
 
 const eyebrow: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: SUBTLE };
 
 export function InvoicesAR() {
-  const { syncedArRaw, adjustments, setAdjustment, refreshQbo } = useStore();
-  const [status, setStatus] = useState<QboStatus | null>(null);
-  const [syncing, setSyncing] = useState(false);
+  const { syncedArRaw, adjustments, setAdjustment } = useStore();
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("due");
   const [q, setQ] = useState("");
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/qbo/status", { cache: "no-store" });
-      setStatus((await res.json()) as QboStatus);
-    } catch {
-      /* leave null */
-    }
-  }, []);
-  useEffect(() => { void load(); }, [load]);
-
-  const refresh = async () => {
-    setSyncing(true);
-    try {
-      await fetch("/api/sync/qbo", { method: "POST" });
-      await load();
-      await refreshQbo();
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const rows: Row[] = useMemo(
     () =>
@@ -150,24 +112,6 @@ export function InvoicesAR() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Sync bar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", background: "var(--bg-elev)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 14, letterSpacing: ".02em" }}>QuickBooks sync</span>
-          <span style={{ ...eyebrow, fontSize: 10, letterSpacing: ".12em", border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px", textTransform: "capitalize" }}>{status?.environment ?? "…"}</span>
-          <span style={{ width: 7, height: 7, borderRadius: 999, background: status?.connected ? "var(--green)" : "var(--text-faint)", display: "inline-block" }} />
-          <span style={{ fontSize: 13, color: "#4a4a4a" }}>
-            {status?.lastSync
-              ? `Synced ${timeShort(status.lastSync.syncedAt)} · ${status.lastSync.arCount} invoices · ${fmtMoney(status.lastSync.arTotal)} pulled · ${status.lastSync.apCount} in validation`
-              : status?.connected ? "Connected — refresh to pull invoices" : "Not connected"}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="/api/connect/qbo/start" style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "#4a4a4a", textDecoration: "underline", textUnderlineOffset: 3 }}>Reconnect</a>
-          <button onClick={refresh} disabled={syncing} style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", padding: "9px 16px", borderRadius: 8, border: "none", background: "var(--green)", color: "#fff", cursor: "pointer", opacity: syncing ? 0.6 : 1 }}>{syncing ? "Syncing…" : "Refresh AR"}</button>
-        </div>
-      </div>
-
       {/* AR card */}
       <div style={{ background: "var(--bg-elev)", border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
         {/* Summary tiles */}
