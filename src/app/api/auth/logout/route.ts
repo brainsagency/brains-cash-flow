@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE_NAME } from "@/lib/auth.js";
+import { createSupabaseServer } from "@/lib/supabase/server.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/login", req.url));
-  res.cookies.delete(COOKIE_NAME);
-  return res;
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServer();
+  await supabase.auth.signOut();
+  return NextResponse.redirect(new URL("/login", req.url));
 }
