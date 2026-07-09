@@ -19,6 +19,7 @@ interface Props {
   views: ScenarioView[];
   onCreate: () => void;
   onEdit: (s: Scenario) => void;
+  onDuplicate: (s: Scenario) => void;
 }
 
 const PANEL = "#edead6";
@@ -26,7 +27,9 @@ const BLUE = "#3565e3";
 const PERI = "#9a9ad6";
 const eyebrow: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-dim)" };
 
-export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base, views, onCreate, onEdit }: Props) {
+const actionBtn = (color: string): CSSProperties => ({ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color, background: "transparent", border: "none", cursor: "pointer", padding: 0, flex: "0 0 auto" });
+
+export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base, views, onCreate, onEdit, onDuplicate }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ background: "var(--bg-elev)", border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -56,7 +59,10 @@ export function ScenarioPanel({ scenarios, selectedIds, colorFor, onToggle, base
                     <Check on={on} color={color} />
                     <span style={{ fontWeight: 700, fontSize: 15.5, color: "var(--text)" }}>{s.name}</span>
                   </div>
-                  <button onClick={() => onEdit(s)} style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer", padding: 0, flex: "0 0 auto" }}>Edit</button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, flex: "0 0 auto" }}>
+                    <button onClick={() => onDuplicate(s)} style={actionBtn("var(--text-dim)")}>Duplicate</button>
+                    <button onClick={() => onEdit(s)} style={actionBtn("var(--accent)")}>Edit</button>
+                  </div>
                 </div>
                 {chips.length > 0 && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

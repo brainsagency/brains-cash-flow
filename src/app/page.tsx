@@ -75,6 +75,12 @@ export default function Dashboard() {
     setSelectedIds((prev) => prev.filter((x) => x !== id));
     setBuilder(null);
   };
+  const duplicateScenario = (s: Scenario) => {
+    // Deep-clone so editing the copy never mutates the original's levers.
+    const copy: Scenario = { ...structuredClone(s), id: `scn-${Date.now()}`, name: `${s.name} (copy)` };
+    setScenarios((prev) => [...prev, copy]);
+    setBuilder(copy); // open the editor on the copy so it can be tweaked right away
+  };
   const { view, weekRange, monthRange } = prefs;
   const setView = (v: "week" | "month") => setPrefs({ view: v });
   const setWeekRange = (n: number) => setPrefs({ weekRange: n });
@@ -225,6 +231,7 @@ export default function Dashboard() {
             views={views}
             onCreate={() => setBuilder("new")}
             onEdit={(s) => setBuilder(s)}
+            onDuplicate={duplicateScenario}
           />
         )}
 
