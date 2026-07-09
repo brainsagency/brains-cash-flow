@@ -208,7 +208,7 @@ function Legend({ overlays }: { overlays: Overlay[] }) {
   return (
     <div className="row" style={{ gap: 12, fontSize: 12, color: "var(--text-dim)" }}>
       <span className="row" style={{ gap: 5 }}>
-        <span style={{ width: 14, height: 3, background: "#0b7a5b", display: "inline-block", borderRadius: 2 }} /> Base
+        <span style={{ width: 14, height: 3, background: "#2e7354", display: "inline-block", borderRadius: 2 }} /> Base
       </span>
       {overlays.map((o) => (
         <span key={o.name} className="row" style={{ gap: 5 }}>

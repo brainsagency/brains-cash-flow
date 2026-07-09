@@ -26,7 +26,7 @@ export const DISBURSEMENT_ORDER: readonly DisbursementCategory[] = DISBURSEMENT_
 export const ALL_CATEGORIES: CashCategory[] = [...RECEIPT_CATEGORIES, ...DISBURSEMENT_CATEGORIES];
 
 /** Base cash-balance line color (Float-style green). */
-export const BASE_LINE_COLOR = "#0b7a5b";
+export const BASE_LINE_COLOR = "#2e7354";
 
 /** Distinct line colors for scenario overlays (base line is green). */
 export const OVERLAY_COLORS = ["#2563eb", "#d97706", "#db2777", "#7c3aed", "#0891b2"];

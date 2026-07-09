@@ -12,15 +12,15 @@ export type ViewKey =
   | "insights"
   | "assumptions";
 
-export const NAV: Array<{ key: ViewKey; label: string; title: string; icon: ReactNode }> = [
-  { key: "cashflow", label: "Cash Flow", title: "Cash Flow", icon: <IconChart /> },
-  { key: "invoices", label: "Invoices Due (AR)", title: "Invoices Due (AR)", icon: <IconInvoice /> },
-  { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", icon: <IconBill /> },
-  { key: "opex", label: "Operating Expenses", title: "Operating Expenses", icon: <IconRepeat /> },
-  { key: "staff", label: "Staff Roster", title: "Staff Roster", icon: <IconPeople /> },
-  { key: "scenarios", label: "Scenarios", title: "Scenario planning", icon: <IconLayers /> },
-  { key: "insights", label: "Insights", title: "Insights", icon: <IconPie /> },
-  { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", icon: <IconGear /> },
+export const NAV: Array<{ key: ViewKey; label: string; title: string; eyebrow: string; icon: ReactNode }> = [
+  { key: "cashflow", label: "Cash Flow", title: "Cash Flow", eyebrow: "Overview", icon: <IconChart /> },
+  { key: "invoices", label: "Invoices Due (AR)", title: "Invoices Due (AR)", eyebrow: "Receivables", icon: <IconInvoice /> },
+  { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", eyebrow: "Payables", icon: <IconBill /> },
+  { key: "opex", label: "Operating Expenses", title: "Operating Expenses", eyebrow: "Recurring costs", icon: <IconRepeat /> },
+  { key: "staff", label: "Staff Roster", title: "Staff Roster", eyebrow: "Payroll", icon: <IconPeople /> },
+  { key: "scenarios", label: "Scenarios", title: "Scenario planning", eyebrow: "What-ifs", icon: <IconLayers /> },
+  { key: "insights", label: "Insights", title: "Insights", eyebrow: "Analysis", icon: <IconPie /> },
+  { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", eyebrow: "Configuration", icon: <IconGear /> },
 ];
 
 export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: ViewKey) => void }) {

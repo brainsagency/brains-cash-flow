@@ -135,7 +135,9 @@ export default function Dashboard() {
   const toggle = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const pageTitle = NAV.find((n) => n.key === nav)?.title ?? "Cash Flow";
+  const navItem = NAV.find((n) => n.key === nav);
+  const pageTitle = navItem?.title ?? "Cash Flow";
+  const pageEyebrow = navItem?.eyebrow ?? "Overview";
   const stale = staleFeeds(qboSyncedAt, billSyncedAt);
   // Oldest operating bank balance — manual entry, so warn if it's drifting.
   const bankStaleDays = Math.max(
@@ -152,22 +154,10 @@ export default function Dashboard() {
       <main className="main">
         <header className="topbar">
           <div>
+            <div className="eyebrow">{pageEyebrow}</div>
             <h1>{pageTitle}</h1>
             <div className="sub">Rolling forecast · anchor {input.anchorDate}</div>
           </div>
-          <span className="badge">
-            <span
-              className="dot"
-              style={
-                stale.length > 0
-                  ? { background: "var(--red)" }
-                  : qboSyncedAt || billSyncedAt
-                    ? { background: "var(--green)" }
-                    : undefined
-              }
-            />
-            {liveBadgeText(qboSyncedAt, billSyncedAt)}
-          </span>
         </header>
 
         {stale.length > 0 && (
@@ -270,9 +260,24 @@ export default function Dashboard() {
 
         {nav === "assumptions" && <AssumptionsPanel />}
 
-        <footer className="muted" style={{ marginTop: 32 }}>
-          Read-only against financial systems · figures are projections, reconcile against the sheet before acting ·{" "}
-          <a href="mailto:gustavo@brains.co?subject=Brains%20Cash%20Flow%20support">Contact support</a>
+        <footer className="app-footer">
+          <p className="muted" style={{ margin: 0, maxWidth: 720 }}>
+            Read-only against financial systems · figures are projections, reconcile against the sheet before acting ·{" "}
+            <a href="mailto:gustavo@brains.co?subject=Brains%20Cash%20Flow%20support">Contact support</a>
+          </p>
+          <span className="badge">
+            <span
+              className="dot"
+              style={
+                stale.length > 0
+                  ? { background: "var(--red)" }
+                  : qboSyncedAt || billSyncedAt
+                    ? { background: "var(--green)" }
+                    : { background: "var(--text-faint)" }
+              }
+            />
+            {liveBadgeText(qboSyncedAt, billSyncedAt)}
+          </span>
         </footer>
       </main>
     </div>

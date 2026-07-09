@@ -35,7 +35,7 @@ export function ScenarioMenu({
           <div className="popover" style={{ right: 0, left: "auto", width: 280 }}>
             <div className="pop-head">Compare on chart</div>
             <div className="pop-row" style={{ cursor: "default" }}>
-              <span style={{ width: 12, height: 3, background: "#0b7a5b", borderRadius: 2, display: "inline-block" }} />
+              <span style={{ width: 12, height: 3, background: "#2e7354", borderRadius: 2, display: "inline-block" }} />
               <span className="pop-name">Base (always shown)</span>
             </div>
             {scenarios.length === 0 && (
