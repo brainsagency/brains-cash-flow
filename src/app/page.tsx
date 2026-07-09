@@ -12,13 +12,12 @@ import { CashFlowCard, type RangeOption } from "@/components/CashFlowCard.js";
 import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
-import { SyncedLedger } from "@/components/SyncedLedger.js";
 import { OperatingExpenses } from "@/components/OperatingExpenses.js";
 import { StaffRoster } from "@/components/StaffRoster.js";
 import { NewBusiness } from "@/components/NewBusiness.js";
 import { OtherWithdrawals } from "@/components/OtherWithdrawals.js";
 import { InvoicesAR } from "@/components/InvoicesAR.js";
-import { BillPanel } from "@/components/BillPanel.js";
+import { BillsAP } from "@/components/BillsAP.js";
 import { AssumptionsPanel } from "@/components/AssumptionsPanel.js";
 import { ScenarioPanel, type ScenarioView } from "@/components/ScenarioPanel.js";
 import { ScenarioBuilder } from "@/components/ScenarioBuilder.js";
@@ -203,9 +202,8 @@ export default function Dashboard() {
 
         {nav === "invoices" && <InvoicesAR />}
         {nav === "bills" && (
-          <div className="grid" style={{ gap: 16 }}>
-            <BillPanel />
-            <SyncedLedger kind="ap" />
+          <div className="grid" style={{ gap: 20 }}>
+            <BillsAP />
             <OtherWithdrawals />
           </div>
         )}
