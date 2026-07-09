@@ -164,6 +164,42 @@ select {
   justify-content: center;
   padding: 9px 0;
 }
+/* Hover tooltips on the collapsed rail */
+.sidebar {
+  z-index: 20;
+}
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .brand-toggle {
+  position: relative;
+}
+.sidebar.collapsed .nav-item::after,
+.sidebar.collapsed .brand-toggle::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  background: var(--text);
+  color: var(--bg-elev);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 6px 18px rgba(19, 19, 19, 0.22);
+  z-index: 60;
+}
+.sidebar.collapsed .nav-item:hover::after,
+.sidebar.collapsed .brand-toggle:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
 .sidebar-nav {
   display: flex;
   flex-direction: column;

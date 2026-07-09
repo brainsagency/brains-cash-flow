@@ -32,7 +32,7 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
           <button
             className="brand-toggle"
             onClick={() => setCollapsed(false)}
-            title="Expand sidebar"
+            data-label="Expand"
             aria-label="Expand sidebar"
           >
             <BrainsMark />
@@ -57,7 +57,8 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
             key={item.key}
             className={`nav-item ${active === item.key ? "active" : ""}`}
             onClick={() => onSelect(item.key)}
-            title={collapsed ? item.label : undefined}
+            data-label={item.label}
+            aria-label={item.label}
           >
             {item.icon}
             <span>{item.label}</span>
