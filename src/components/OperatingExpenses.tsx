@@ -195,8 +195,8 @@ export function OperatingExpenses() {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Hero */}
       <div style={{ ...CARD, position: "relative", display: "flex", gap: 36, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <button className="btn sm ghost" onClick={() => setEditing((v) => !v)} style={{ position: "absolute", top: 16, right: 18 }}>
-          {editing ? "Done" : "Edit"}
+        <button className={`btn sm ${editing ? "primary" : ""}`} onClick={() => setEditing((v) => !v)} style={{ position: "absolute", top: 16, right: 18 }}>
+          {editing ? "Done editing" : "Edit amounts"}
         </button>
         <div>
           <Eyebrow>Monthly run-rate</Eyebrow>
@@ -222,7 +222,7 @@ export function OperatingExpenses() {
             <Eyebrow color="var(--text)">Company cards</Eyebrow>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Budget flows to the forecast; enter actuals as months close</span>
           </div>
-          {editing && <AddButton label="Add card" onClick={addAmex} />}
+          <AddButton label="Add card" onClick={() => { setEditing(true); addAmex(); }} />
         </div>
         {amex.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No cards yet.</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -293,7 +293,7 @@ export function OperatingExpenses() {
       <div style={CARD}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <Eyebrow color="var(--text)">Recurring expenses</Eyebrow>
-          {editing && <AddButton label="Add expense" onClick={addOpex} />}
+          <AddButton label="Add expense" onClick={() => { setEditing(true); addOpex(); }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
           {recGroup("Monthly", monthlyItems, `${money2(monthlySum)} /mo`)}
@@ -308,7 +308,7 @@ export function OperatingExpenses() {
             <Eyebrow color="var(--text)">One-time expenses</Eyebrow>
             {oneoffs.length > 0 && <span style={{ fontSize: 13, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{money0(oneoffTotal)} total</span>}
           </div>
-          {editing && <AddButton label="Add one-time" onClick={addOneoff} />}
+          <AddButton label="Add one-time" onClick={() => { setEditing(true); addOneoff(); }} />
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
           Ad-hoc costs paid directly (a conference, a one-off purchase) that aren&apos;t on a card or in Bill.com.
