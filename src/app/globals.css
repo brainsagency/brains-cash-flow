@@ -95,7 +95,21 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 8px 14px;
+  height: 44px;
+  padding: 7px 8px;
+  margin-bottom: 8px;
+}
+.brand-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.brand-toggle:hover {
+  opacity: 0.82;
 }
 .sidebar .brand .wordmark {
   height: 19px;
@@ -136,10 +150,8 @@ select {
   width: 68px;
 }
 .sidebar.collapsed .brand {
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0 14px;
-  gap: 8px;
+  justify-content: center;
+  padding: 7px 0;
 }
 .sidebar.collapsed .nav-item {
   justify-content: center;

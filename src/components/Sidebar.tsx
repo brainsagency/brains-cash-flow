@@ -28,15 +28,28 @@ export function Sidebar({ active, onSelect }: { active: ViewKey; onSelect: (v: V
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="brand">
-        {collapsed ? <BrainsMark /> : <BrainsWordmark />}
-        <button
-          className="collapse-btn"
-          onClick={() => setCollapsed((v) => !v)}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <IconChevron dir={collapsed ? "right" : "left"} />
-        </button>
+        {collapsed ? (
+          <button
+            className="brand-toggle"
+            onClick={() => setCollapsed(false)}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+          >
+            <BrainsMark />
+          </button>
+        ) : (
+          <>
+            <BrainsWordmark />
+            <button
+              className="collapse-btn"
+              onClick={() => setCollapsed(true)}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <IconChevron dir="left" />
+            </button>
+          </>
+        )}
       </div>
       <nav className="sidebar-nav">
         {NAV.map((item) => (
