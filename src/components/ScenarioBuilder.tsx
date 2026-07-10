@@ -117,22 +117,30 @@ function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMem
     const byStaff = lever.severanceByStaff ?? {};
     const defaultWeeks = lever.severanceWeeks ?? 0;
     const weeksFor = (id: string) => byStaff[id] ?? defaultWeeks;
-    // Severance is gross pay (no employer load).
+    const vacByStaff = lever.vacationDaysByStaff ?? {};
+    const defaultVacDays = lever.vacationDays ?? 0;
+    const vacDaysFor = (id: string) => vacByStaff[id] ?? defaultVacDays;
+    // Severance and vacation payout are gross pay (no employer load).
     const weeklyPay = (m: StaffMember) => m.annualSalary / 52;
+    const dailyPay = (m: StaffMember) => m.annualSalary / 260; // working-day rate = weekly ÷ 5
 
     const toggle = (id: string) => {
       const next = new Set(selected);
       const nextBy = { ...byStaff };
-      if (next.has(id)) { next.delete(id); delete nextBy[id]; }
+      const nextVac = { ...vacByStaff };
+      if (next.has(id)) { next.delete(id); delete nextBy[id]; delete nextVac[id]; }
       else next.add(id);
-      onChange({ staffIds: [...next], severanceByStaff: nextBy } as Partial<Lever>);
+      onChange({ staffIds: [...next], severanceByStaff: nextBy, vacationDaysByStaff: nextVac } as Partial<Lever>);
     };
     const setPersonWeeks = (id: string, weeks: number) =>
       onChange({ severanceByStaff: { ...byStaff, [id]: weeks } } as Partial<Lever>);
+    const setPersonVacDays = (id: string, days: number) =>
+      onChange({ vacationDaysByStaff: { ...vacByStaff, [id]: days } } as Partial<Lever>);
 
     const selStaff = staff.filter((m) => selected.has(m.id));
     const selAnnual = selStaff.reduce((s, m) => s + m.annualSalary, 0);
     const totalSeverance = selStaff.reduce((s, m) => s + weeklyPay(m) * weeksFor(m.id), 0);
+    const totalVacation = selStaff.reduce((s, m) => s + dailyPay(m) * vacDaysFor(m.id), 0);
 
     return (
       <>
@@ -161,10 +169,21 @@ function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMem
               <option value="payroll">On payroll schedule</option>
             </select>
           </div>
+          <div className="field" style={{ maxWidth: 150 }}>
+            <label>Default vacation (days)</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={defaultVacDays}
+              onChange={(e) => onChange({ vacationDays: Number(e.target.value) } as Partial<Lever>)}
+            />
+          </div>
         </div>
         <div className="muted" style={{ marginBottom: 6, fontSize: 12 }}>
           Pick who&apos;s affected — {selected.size} selected · {fmtMoney(selAnnual)}/yr
-          {selected.size > 0 && <> · severance {fmtMoney(totalSeverance)}</>}
+          {selected.size > 0 && totalSeverance > 0 && <> · severance {fmtMoney(totalSeverance)}</>}
+          {selected.size > 0 && totalVacation > 0 && <> · vacation {fmtMoney(totalVacation)}</>}
         </div>
         <div className="staff-pick">
           {staff.length === 0 && <div className="muted" style={{ padding: 6 }}>No roster yet — add staff first.</div>}
@@ -187,7 +206,17 @@ function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMem
                       style={{ width: 56, padding: "3px 5px" }}
                       title="Severance weeks for this person"
                     />
-                    <span style={{ fontSize: 12 }}>wk ≈ {fmtMoney(weeklyPay(m) * weeksFor(m.id))}</span>
+                    <span style={{ fontSize: 12 }}>wk</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={vacDaysFor(m.id)}
+                      onChange={(e) => setPersonVacDays(m.id, Number(e.target.value))}
+                      style={{ width: 56, padding: "3px 5px" }}
+                      title="Vacation payout days for this person"
+                    />
+                    <span style={{ fontSize: 12 }}>d ≈ {fmtMoney(weeklyPay(m) * weeksFor(m.id) + dailyPay(m) * vacDaysFor(m.id))}</span>
                   </span>
                 ) : (
                   <span className="sal">{fmtMoney(m.annualSalary)}</span>

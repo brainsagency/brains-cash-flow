@@ -43,6 +43,8 @@ export interface LayoffLever {
   effectiveDate: ISODate;
   /** One-time severance paid on `effectiveDate`. */
   severance?: number;
+  /** One-time accrued-vacation/PTO payout paid on `effectiveDate`. */
+  vacationPayout?: number;
 }
 
 /** Drop a client retainer from `effectiveDate`. */
@@ -95,6 +97,14 @@ export interface LayoffGroupLever {
    * schedule for the severance window (paid across their normal paydays).
    */
   severancePayout?: "lump" | "payroll";
+  /**
+   * Default days of accrued vacation/PTO paid out per person unless overridden.
+   * Always disbursed as a lump on the effective date (statutory at termination),
+   * valued at the gross working-day rate (weekly pay ÷ 5).
+   */
+  vacationDays?: number;
+  /** Per-person vacation-payout override (days), keyed by staff id. */
+  vacationDaysByStaff?: Record<string, number>;
   label?: string;
 }
 
@@ -220,6 +230,14 @@ function applyLayoff(input: ForecastInput, lever: LayoffLever): void {
       memo: `Severance: ${lever.role}`,
     });
   }
+  if (lever.vacationPayout && lever.vacationPayout > 0) {
+    input.events!.push({
+      category: "payroll",
+      amount: lever.vacationPayout,
+      date: lever.effectiveDate,
+      memo: `Vacation payout: ${lever.role}`,
+    });
+  }
 }
 
 /** Monthly-equivalent amount of a recurring item. */
@@ -246,8 +264,9 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
     item.startDate <= lever.effectiveDate && (!item.endDate || item.endDate >= lever.effectiveDate);
 
   for (const id of lever.staffIds) {
-    // Per-person severance weeks, falling back to the group default.
+    // Per-person severance weeks / vacation days, falling back to group defaults.
     const weeks = lever.severanceByStaff?.[id] ?? lever.severanceWeeks ?? 0;
+    const vacDays = lever.vacationDaysByStaff?.[id] ?? lever.vacationDays ?? 0;
     const prefix = `staff:${id}:`;
     let monthlyAtLayoff = 0;
     for (const item of input.recurring!) {
@@ -256,9 +275,23 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
       // Ongoing pay always stops at the layoff date (never extend an earlier end).
       item.endDate = item.endDate && item.endDate < cutoff ? item.endDate : cutoff;
     }
-    if (weeks <= 0 || monthlyAtLayoff <= 0) continue;
+    if (monthlyAtLayoff <= 0) continue;
     const grossMonthly = monthlyAtLayoff / load;
     const grossWeekly = (grossMonthly * 12) / 52;
+
+    // Vacation payout: accrued PTO paid as a lump on the effective date (gross,
+    // no employer load). Working-day rate = weekly pay ÷ 5.
+    if (vacDays > 0) {
+      input.events!.push({
+        id: `layoff-vac:${id}`,
+        category: "payroll",
+        amount: (grossWeekly / 5) * vacDays,
+        date: lever.effectiveDate,
+        memo: `Vacation payout (${vacDays}d)`,
+      });
+    }
+
+    if (weeks <= 0) continue;
     if (payout === "payroll") {
       // Pay the gross severance across the normal semi-monthly paydays for the window.
       input.recurring!.push({

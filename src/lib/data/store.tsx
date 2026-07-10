@@ -318,8 +318,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         basis: "committed",
         memo: `Severance: ${m.name}`,
       }));
+    const vacationPayout: CashEvent[] = staff
+      .filter((m) => m.dot && m.vacationPayout && m.vacationPayout > 0)
+      .map((m) => ({
+        id: `staff-vac:${m.id}`,
+        category: "payroll",
+        amount: m.vacationPayout!,
+        date: m.dot!,
+        basis: "committed",
+        memo: `Vacation payout: ${m.name}`,
+      }));
 
-    return { ...state.input, recurring, events: [...(state.input.events ?? []), ...severance] };
+    return {
+      ...state.input,
+      recurring,
+      events: [...(state.input.events ?? []), ...severance, ...vacationPayout],
+    };
   }, [state.input]);
 
   // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced

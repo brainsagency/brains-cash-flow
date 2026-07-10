@@ -175,6 +175,30 @@ describe("scenario levers", () => {
     expect(sched.events!.some((e) => e.id === "layoff-sev:s1")).toBe(false);
   });
 
+  it("layoffGroup pays a vacation lump on the effective date, even with no severance", () => {
+    const rosterBase: ForecastInput = {
+      anchorDate: ANCHOR,
+      bankAccounts: [{ id: "op", name: "Op", beginningBalance: 500_000 }],
+      recurring: [
+        { id: "staff:s1:salary", category: "payroll", amount: 5_000, frequency: "semimonthly", startDate: ANCHOR },
+      ],
+    };
+    // s1: 5,000 semi-monthly (load 1) → gross weekly = 10,000*12/52, gross daily = /5.
+    const grossDaily = ((10_000 * 12) / 52) / 5;
+
+    const out = applyScenario(rosterBase, {
+      id: "v",
+      name: "v",
+      levers: [{ kind: "layoffGroup", staffIds: ["s1"], effectiveDate: "2026-10-01", severanceWeeks: 0, vacationDays: 10 }],
+    });
+    const vac = out.events!.find((e) => e.id === "layoff-vac:s1")!;
+    expect(vac.amount).toBeCloseTo(grossDaily * 10, 5);
+    expect(vac.date).toBe("2026-10-01");
+    // No severance was requested, so no severance disbursement.
+    expect(out.events!.some((e) => e.id === "layoff-sev:s1")).toBe(false);
+    expect(out.recurring!.some((r) => r.id === "layoff-sev:s1")).toBe(false);
+  });
+
   it("addRevenue (one-off) raises ending cash by the amount", () => {
     const withRev = runScenario(base(), {
       id: "rev",

@@ -138,6 +138,8 @@ export interface StaffMember {
   dot?: ISODate;
   /** One-time severance paid on `dot`. */
   severance?: number;
+  /** One-time accrued-vacation/PTO payout paid on `dot`. */
+  vacationPayout?: number;
   /** Effective date of a scheduled salary change, if any. */
   salaryChangeDate?: ISODate;
   /** New annual (gross) salary from `salaryChangeDate`. */

@@ -142,7 +142,9 @@ function leverLabel(l: Lever): string {
       return `– Layoff ${l.role}`;
     case "layoffGroup": {
       const hasSev = (l.severanceWeeks ?? 0) > 0 || Object.keys(l.severanceByStaff ?? {}).length > 0;
-      return `– Lay off ${l.staffIds.length}${hasSev ? " (+sev)" : ""}`;
+      const hasVac = (l.vacationDays ?? 0) > 0 || Object.keys(l.vacationDaysByStaff ?? {}).length > 0;
+      const extras = [hasSev && "sev", hasVac && "vac"].filter(Boolean).join("+");
+      return `– Lay off ${l.staffIds.length}${extras ? ` (+${extras})` : ""}`;
     }
     case "addRevenue":
       return `+ ${l.label || "Revenue"} ${fmtMoney(l.amount)}${l.mode === "recurring" ? "/mo" : ""}`;
