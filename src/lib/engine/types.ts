@@ -138,6 +138,13 @@ export interface StaffMember {
   dot?: ISODate;
   /** One-time severance paid on `dot`. */
   severance?: number;
+  /**
+   * How severance is disbursed. "lump" (default) = one payment on `dot`.
+   * "payroll" = keep the person on the normal semi-monthly paycheck (annual/24)
+   * from `dot` until the severance total is paid out (final run is the
+   * remainder). Vacation payout and final salary always land on `dot`.
+   */
+  severancePayout?: "lump" | "payroll";
   /** One-time accrued-vacation/PTO payout paid on `dot`. */
   vacationPayout?: number;
   /** Effective date of a scheduled salary change, if any. */

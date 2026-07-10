@@ -104,7 +104,7 @@ export function StaffRoster() {
                     <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{m.name || "Unnamed"}</span>
                     {isValidISODate(m.doh) && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>since {fmtShortDate(m.doh)}</span>}
                     {m.dot && isValidISODate(m.dot) && <span style={{ fontSize: 13, color: "var(--red)" }}>· ends {fmtShortDate(m.dot)}</span>}
-                    {m.severance ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· sev {fmtMoney(m.severance)}</span> : null}
+                    {m.severance ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· sev {fmtMoney(m.severance)}{m.severancePayout === "payroll" ? " (payroll)" : ""}</span> : null}
                     {m.vacationPayout ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· vac {fmtMoney(m.vacationPayout)}</span> : null}
                   </div>
                   <div style={{ fontSize: 14.5, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
@@ -126,6 +126,7 @@ export function StaffRoster() {
                 <span>Hire date</span>
                 <span>Term date</span>
                 <span>Severance</span>
+                <span>Sev. payout</span>
                 <span>Vacation payout</span>
                 <span />
               </div>
@@ -139,6 +140,10 @@ export function StaffRoster() {
                   <input type="date" value={m.doh} onChange={(e) => update(i, { doh: e.target.value })} />
                   <input type="date" value={m.dot ?? ""} onChange={(e) => update(i, { dot: e.target.value || undefined })} />
                   <MoneyInput value={m.severance ?? 0} step="0.01" onChange={(n) => update(i, { severance: n || undefined })} />
+                  <select value={m.severancePayout ?? "lump"} onChange={(e) => update(i, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}>
+                    <option value="lump">Lump sum</option>
+                    <option value="payroll">On payroll</option>
+                  </select>
                   <MoneyInput value={m.vacationPayout ?? 0} step="0.01" onChange={(n) => update(i, { vacationPayout: n || undefined })} />
                   <button className="btn sm ghost" onClick={() => remove(i)} title="Remove">✕</button>
                 </div>

@@ -47,6 +47,24 @@ export interface UiPrefs {
 const DEFAULT_PREFS: UiPrefs = { view: "week", weekRange: 26, monthRange: 18 };
 
 /**
+ * The next `count` semi-monthly paydays (the 1st and 15th of each month)
+ * strictly after `after`. Matches the roster's payroll cadence, so severance
+ * kept "on payroll" lands on the same days as a normal paycheck.
+ */
+function nextSemiMonthlyPaydays(after: string, count: number): string[] {
+  const out: string[] = [];
+  let [y, m] = after.slice(0, 7).split("-").map(Number) as [number, number];
+  while (out.length < count) {
+    for (const day of [1, 15]) {
+      const d = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if (d > after && out.length < count) out.push(d);
+    }
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/**
  * Per-item annotation on any synced ledger event, keyed by the event id
  * (`qbo-inv-…` for invoices, `bill-…` for bills), so it survives every
  * re-sync. `excluded` drops the item from the forecast (e.g. a disputed
@@ -308,16 +326,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...(state.input.recurring ?? []).filter((r) => r.category !== "payroll"),
       ...payroll,
     ];
-    const severance: CashEvent[] = staff
-      .filter((m) => m.dot && m.severance && m.severance > 0)
-      .map((m) => ({
-        id: `staff-sev:${m.id}`,
-        category: "payroll",
-        amount: m.severance!,
-        date: m.dot!,
-        basis: "committed",
-        memo: `Severance: ${m.name}`,
-      }));
+    const severance: CashEvent[] = [];
+    for (const m of staff) {
+      if (!m.dot || !m.severance || m.severance <= 0) continue;
+      const semiGross = m.annualSalary / 24; // normal semi-monthly gross paycheck
+      // "payroll" = spread the severance across normal paydays at the usual
+      // paycheck amount until it's exhausted (final run is the remainder). Falls
+      // back to a lump if there's no salary to pace it against.
+      if (m.severancePayout === "payroll" && semiGross > 0) {
+        const runs = Math.ceil(m.severance / semiGross);
+        const days = nextSemiMonthlyPaydays(m.dot, runs);
+        let remaining = m.severance;
+        days.forEach((date, i) => {
+          const amount = Math.min(remaining, semiGross);
+          remaining -= amount;
+          severance.push({
+            id: `staff-sev:${m.id}:${i}`,
+            category: "payroll",
+            amount,
+            date,
+            basis: "committed",
+            memo: `Severance (payroll ${i + 1}/${runs}): ${m.name}`,
+          });
+        });
+      } else {
+        severance.push({
+          id: `staff-sev:${m.id}`,
+          category: "payroll",
+          amount: m.severance,
+          date: m.dot,
+          basis: "committed",
+          memo: `Severance: ${m.name}`,
+        });
+      }
+    }
     const vacationPayout: CashEvent[] = staff
       .filter((m) => m.dot && m.vacationPayout && m.vacationPayout > 0)
       .map((m) => ({
