@@ -125,9 +125,16 @@ function BankAccounts() {
         const stale = age !== null && age >= STALE_BALANCE_DAYS;
         return (
           <div className="row" key={a.id} style={{ marginBottom: 6 }}>
-            <div style={{ width: 150 }}>
-              {a.name}
-              {a.mask ? ` …${a.mask}` : ""}
+            <div className="row" style={{ width: 150, gap: 4 }}>
+              <input
+                type="text"
+                value={a.name}
+                placeholder="Account name"
+                aria-label="Account name"
+                onChange={(e) => update(a.id, { name: e.target.value })}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              {a.mask ? <span className="muted" style={{ whiteSpace: "nowrap" }}>…{a.mask}</span> : null}
             </div>
             <div style={{ width: 150 }}>
               <MoneyInput value={a.beginningBalance} step="0.01" onChange={(n) => setBalance(a.id, n)} />
