@@ -38,5 +38,5 @@ export type {
 export { monthlyRollup } from "./rollup.js";
 export type { MonthlyRow } from "./rollup.js";
 export { narrate } from "./narrative.js";
-export { staffToPayroll } from "./adapters/staff.js";
+export { staffToPayroll, terminationFinalPay } from "./adapters/staff.js";
 export type { StaffMember, StaffToPayrollOptions } from "./adapters/staff.js";

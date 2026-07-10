@@ -1,6 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { forecast } from "../forecast.js";
-import { staffToPayroll, type StaffMember } from "./staff.js";
+import { staffToPayroll, terminationFinalPay, type StaffMember } from "./staff.js";
+
+describe("terminationFinalPay", () => {
+  const ANNUAL = 120_000; // half-month = 5,000
+  it("prorates the days worked in the final first-half period, term date exclusive", () => {
+    // Term 8/4 → 3 days worked (1st–3rd) of the 15-day first-half period.
+    expect(terminationFinalPay(ANNUAL, "2026-08-04")).toBeCloseTo(5_000 * (3 / 15), 5);
+  });
+  it("prorates the second-half period against its own length", () => {
+    // Term 8/20 → 4 days worked (16th–19th); Aug's second half is 16 days.
+    expect(terminationFinalPay(ANNUAL, "2026-08-20")).toBeCloseTo(5_000 * (4 / 16), 5);
+  });
+  it("returns 0 when the term date is itself a payday (a full check already lands)", () => {
+    expect(terminationFinalPay(ANNUAL, "2026-08-01")).toBe(0);
+    expect(terminationFinalPay(ANNUAL, "2026-08-15")).toBe(0);
+  });
+  it("returns 0 on the 16th (the 15th check already covered the first half)", () => {
+    expect(terminationFinalPay(ANNUAL, "2026-08-16")).toBe(0);
+  });
+  it("applies the employer load, like ordinary wages", () => {
+    expect(terminationFinalPay(ANNUAL, "2026-08-04", 1.15)).toBeCloseTo(5_000 * 1.15 * (3 / 15), 5);
+  });
+  it("handles February's short second half", () => {
+    // 2026 is not a leap year → Feb has 28 days, second half = 13 days.
+    expect(terminationFinalPay(ANNUAL, "2026-02-20")).toBeCloseTo(5_000 * (4 / 13), 5);
+  });
+});
 
 describe("staffToPayroll", () => {
   it("emits one semi-monthly item for a plain salaried employee", () => {

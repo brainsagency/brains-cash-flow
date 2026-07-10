@@ -84,6 +84,45 @@ export function staffToPayroll(
   return items;
 }
 
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function daysInMonth(year: number, month1: number): number {
+  if (month1 === 2 && ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0)) return 29;
+  return DAYS_IN_MONTH[month1 - 1]!;
+}
+
+/**
+ * Prorated final paycheck for a mid-period termination.
+ *
+ * Regular semi-monthly pay covers completed half-month periods (1st–15th and
+ * 16th–EOM), paid in arrears on the 1st and 15th. When a term date falls inside
+ * a half-month period, the days already worked in that final partial period
+ * aren't covered by any payday on or before the term date — the next payday
+ * (which would have covered them) lands after the term date and is cut off. So
+ * pay that balance, prorated by day, on the term date itself.
+ *
+ * The term date is treated as the first non-working day, so a term date of the
+ * 4th pays the 3 days worked (1st–3rd). Returns 0 when the term date is itself a
+ * payday (a full check already lands then) or there's nothing left to prorate.
+ * The result carries the employer load, since it's ordinary wages.
+ */
+export function terminationFinalPay(annualSalary: number, dot: ISODate, loadFactor = 1): number {
+  const day = Number(dot.slice(8, 10));
+  if (annualSalary <= 0 || day === 1 || day === 15) return 0;
+  const halfMonth = (annualSalary * loadFactor) / 24;
+  let worked: number;
+  let periodDays: number;
+  if (day < 15) {
+    periodDays = 15; // the 1st–15th block
+    worked = day - 1; // days worked before the term date
+  } else {
+    const [y, mo] = dot.slice(0, 7).split("-").map(Number) as [number, number];
+    periodDays = daysInMonth(y, mo) - 15; // the 16th–EOM block
+    worked = day - 16;
+  }
+  if (worked <= 0 || periodDays <= 0) return 0;
+  return halfMonth * (worked / periodDays);
+}
+
 function payrollItem(
   m: StaffMember,
   amount: number,

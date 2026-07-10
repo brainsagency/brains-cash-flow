@@ -28,6 +28,7 @@ import {
   addDays,
   isValidISODate,
   staffToPayroll,
+  terminationFinalPay,
   type CashEvent,
   type ForecastInput,
   type Scenario,
@@ -371,10 +372,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         memo: `Vacation payout: ${m.name}`,
       }));
 
+    // Final salary: a mid-period termination is paid the balance owed for the
+    // days worked in that last partial period, on the term date itself — rather
+    // than dropping it (the next regular payday falls after the cutoff).
+    const load = state.input.staffLoadFactor ?? 1;
+    const finalPay: CashEvent[] = [];
+    for (const m of staff) {
+      if (!m.dot) continue;
+      const salaryAtDot =
+        m.salaryChangeDate && m.newSalary !== undefined && m.dot >= m.salaryChangeDate
+          ? m.newSalary
+          : m.annualSalary;
+      const amount = terminationFinalPay(salaryAtDot, m.dot, load);
+      if (amount <= 0) continue;
+      finalPay.push({
+        id: `staff-finalpay:${m.id}`,
+        category: "payroll",
+        amount,
+        date: m.dot,
+        basis: "committed",
+        memo: `Final salary (partial period): ${m.name}`,
+      });
+    }
+
     return {
       ...state.input,
       recurring,
-      events: [...(state.input.events ?? []), ...severance, ...vacationPayout],
+      events: [...(state.input.events ?? []), ...severance, ...vacationPayout, ...finalPay],
     };
   }, [state.input]);
 
