@@ -34,6 +34,7 @@ import {
   type Scenario,
   type StaffMember,
 } from "@engine/index.js";
+import { todayISO } from "@/lib/format.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
@@ -205,6 +206,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         next = ls?.input
           ? { input: ls.input, scenarios: ls.scenarios ?? [], adjustments: ls.adjustments ?? {}, prefs }
           : { ...initialState(), prefs };
+      }
+      // The forecast always starts "now": if the stored anchor is behind today
+      // (a prior day or session), roll it forward. Starting cash is dated
+      // separately (balanceAsOf) and prompted for update when it trails the
+      // anchor — see the reconcile banner on the dashboard.
+      const today = todayISO();
+      if (next.input.anchorDate < today) {
+        next = { ...next, input: { ...next.input, anchorDate: today } };
       }
       if (!cancelled) {
         setState(next);

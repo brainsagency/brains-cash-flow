@@ -151,7 +151,12 @@ export default function Dashboard() {
       .filter((a) => a.operating !== false)
       .map((a) => (a.balanceAsOf ? daysAgo(a.balanceAsOf) : 9999)),
   );
-  const bankStale = bankStaleDays >= 10;
+  // The anchor auto-rolls to today, so prompt whenever starting cash predates
+  // the forecast start (or has drifted 10+ days) — reconcile or Confirm it.
+  const bankBehindAnchor = input.bankAccounts
+    .filter((a) => a.operating !== false)
+    .some((a) => !a.balanceAsOf || a.balanceAsOf < input.anchorDate);
+  const bankStale = bankStaleDays >= 10 || bankBehindAnchor;
 
   return (
     <div className="layout">
@@ -186,8 +191,12 @@ export default function Dashboard() {
           <div className="alert warning" style={{ marginBottom: 16 }}>
             <span className="ico">🏦</span>
             <span>
-              <b>Bank balances are {bankStaleDays === 9999 ? "undated" : `${bankStaleDays} days old`}.</b> Starting
-              cash drives the whole forecast — update them in Assumptions when you next reconcile.
+              <b>
+                Update starting cash — the forecast now starts today, but your bank balances are{" "}
+                {bankStaleDays === 9999 ? "undated" : `dated ${bankStaleDays} day${bankStaleDays === 1 ? "" : "s"} ago`}.
+              </b>{" "}
+              Starting cash drives the whole forecast. In Assumptions, edit each balance, or hit <b>Confirm</b> if it
+              hasn&apos;t changed.
             </span>
           </div>
         )}
