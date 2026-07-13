@@ -117,6 +117,9 @@ function BankAccounts() {
     }));
   // Editing a balance stamps it as updated today.
   const setBalance = (id: string, value: number) => update(id, { beginningBalance: value, balanceAsOf: todayISO() });
+  // Confirm the balance is still current without changing the amount — refresh
+  // the as-of date to today (e.g. a savings account that hasn't moved in weeks).
+  const markReviewed = (id: string) => update(id, { balanceAsOf: todayISO() });
 
   return (
     <Group title="Bank accounts (which count toward operating cash)">
@@ -125,16 +128,26 @@ function BankAccounts() {
         const stale = age !== null && age >= STALE_BALANCE_DAYS;
         return (
           <div className="row" key={a.id} style={{ marginBottom: 6 }}>
-            <div className="row" style={{ width: 150, gap: 4 }}>
+            <input
+              type="text"
+              value={a.name}
+              placeholder="Nickname"
+              aria-label="Account nickname"
+              onChange={(e) => update(a.id, { name: e.target.value })}
+              style={{ width: 130 }}
+            />
+            <div className="row" style={{ gap: 3, alignItems: "center" }}>
+              <span className="muted">…</span>
               <input
                 type="text"
-                value={a.name}
-                placeholder="Account name"
-                aria-label="Account name"
-                onChange={(e) => update(a.id, { name: e.target.value })}
-                style={{ flex: 1, minWidth: 0 }}
+                inputMode="numeric"
+                value={a.mask ?? ""}
+                placeholder="1234"
+                aria-label="Last four digits"
+                maxLength={4}
+                onChange={(e) => update(a.id, { mask: e.target.value.replace(/\D/g, "").slice(0, 4) || undefined })}
+                style={{ width: 52 }}
               />
-              {a.mask ? <span className="muted" style={{ whiteSpace: "nowrap" }}>…{a.mask}</span> : null}
             </div>
             <div style={{ width: 150 }}>
               <MoneyInput value={a.beginningBalance} step="0.01" onChange={(n) => setBalance(a.id, n)} />
@@ -146,11 +159,19 @@ function BankAccounts() {
             <span className={`chip ${stale ? "danger" : "neutral"}`} style={{ marginLeft: 4 }}>
               {a.balanceAsOf ? `as of ${fmtShortDate(a.balanceAsOf)}${stale ? ` · ${age}d old` : ""}` : "no date"}
             </span>
+            <button
+              className="btn sm ghost"
+              onClick={() => markReviewed(a.id)}
+              title="Confirm this balance is still current — sets the as-of date to today without changing the amount"
+            >
+              Confirm
+            </button>
           </div>
         );
       })}
       <div className="muted" style={{ marginTop: 8 }}>
-        Editing a balance stamps it as updated today. Update these when you reconcile — balances older than{" "}
+        Editing a balance stamps it as updated today. If a balance hasn&apos;t moved (a savings account can sit for
+        weeks), hit <b>Confirm</b> to refresh the as-of date without changing the amount. Balances older than{" "}
         {STALE_BALANCE_DAYS} days are flagged.
       </div>
     </Group>
