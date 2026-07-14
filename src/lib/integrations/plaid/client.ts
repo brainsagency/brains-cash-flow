@@ -50,21 +50,21 @@ function plaidClient(): PlaidApi {
 }
 
 /**
- * Products requested at Link time. Defaults to `balance` — the balance-only
- * product, which is what this integration uses and avoids needing Auth (account
- * numbers) or Transactions enabled on your Plaid account. Override with
- * `PLAID_PRODUCTS` (comma-separated) if your account has a different product
- * enabled, e.g. `PLAID_PRODUCTS=transactions`.
+ * Products requested at Link time. Plaid won't accept `balance` on its own — it
+ * auto-initializes alongside any other product, and we only ever call
+ * `/accounts/balance/get`. So we request `transactions` (the most commonly
+ * enabled product) purely to unlock balances; no transactions are pulled.
+ * Override with `PLAID_PRODUCTS` (comma-separated) to match whatever product is
+ * enabled on your Plaid account, e.g. `PLAID_PRODUCTS=auth`.
  */
 function linkProducts(): Products[] {
   const raw = process.env.PLAID_PRODUCTS;
-  if (!raw) return [Products.Balance];
   const valid = new Set(Object.values(Products) as string[]);
-  const chosen = raw
+  const chosen = (raw ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
-    .filter((s) => valid.has(s)) as Products[];
-  return chosen.length ? chosen : [Products.Balance];
+    .filter((s) => valid.has(s) && s !== "balance") as Products[];
+  return chosen.length ? chosen : [Products.Transactions];
 }
 
 /**
