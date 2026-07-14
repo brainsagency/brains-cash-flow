@@ -175,7 +175,19 @@ export function OperatingExpenses() {
             )}
             <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>
               {cadence(r)}
+              {!editing && r.endDate && <span style={{ color: "var(--text-faint)" }}> · Ends {fmtShortDate(r.endDate)}</span>}
             </div>
+            {editing && (
+              r.endDate ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Ends</span>
+                  <input type="date" min={r.startDate} value={r.endDate} onChange={(e) => updateItem(r.id, { endDate: e.target.value || undefined })} style={{ ...boxInput, padding: "5px 8px", fontSize: 13 }} />
+                  <button onClick={() => updateItem(r.id, { endDate: undefined })} title="Remove end date" style={xBtn}>✕</button>
+                </div>
+              ) : (
+                <button onClick={() => updateItem(r.id, { endDate: `${monthsFrom(r.startDate, 13)[12]}-01` })} style={endDateBtn}>+ Set end date</button>
+              )
+            )}
           </div>
           {editing ? (
             <MoneyInput value={r.amount} step="0.01" onChange={(n) => updateItem(r.id, { amount: n })} />
@@ -352,3 +364,4 @@ export function OperatingExpenses() {
 const boxInput: CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, background: "#fff", padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14 };
 const rowNameInput: CSSProperties = { ...boxInput, width: "100%", fontWeight: 700 };
 const xBtn: CSSProperties = { border: "none", background: "transparent", color: "var(--text-faint)", cursor: "pointer", fontSize: 14, display: "grid", placeItems: "center" };
+const endDateBtn: CSSProperties = { marginTop: 6, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: 12, padding: 0, textAlign: "left" };
