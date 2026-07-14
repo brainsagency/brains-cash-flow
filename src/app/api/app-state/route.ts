@@ -34,7 +34,18 @@ export async function PUT(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "cloud storage not configured" }, { status: 503 });
   }
-  let body: { input?: { anchorDate?: string; bankAccounts?: unknown[] }; scenarios?: unknown[]; adjustments?: Record<string, unknown> };
+  let body: {
+    input?: { anchorDate?: string; bankAccounts?: unknown[] };
+    scenarios?: unknown[];
+    adjustments?: Record<string, unknown>;
+    /**
+     * The `updated_at` the client last saw. Used as an optimistic-concurrency
+     * check: the write only lands if the stored row still matches, so a stale
+     * background tab can't clobber a fresher save from another session. Omit
+     * (null) for a first-ever / adoption write, which upserts unconditionally.
+     */
+    baseUpdatedAt?: string | null;
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -44,15 +55,60 @@ export async function PUT(req: NextRequest) {
   if (!body.input?.anchorDate || !Array.isArray(body.input.bankAccounts)) {
     return NextResponse.json({ error: "input.anchorDate and input.bankAccounts required" }, { status: 400 });
   }
-  const { error } = await supabaseAdmin().from("app_state").upsert({
+
+  const sb = supabaseAdmin();
+  const now = new Date().toISOString();
+  const row = {
     id: "default",
     input: body.input,
     scenarios: body.scenarios ?? [],
     ap_adjustments: body.adjustments ?? {},
-    updated_at: new Date().toISOString(),
-  });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 503 });
+    updated_at: now,
+  };
+  const base = body.baseUpdatedAt;
+
+  // No base → first write / adoption: last-write-wins upsert (legacy behavior).
+  if (!base) {
+    const { error } = await sb.from("app_state").upsert(row);
+    if (error) return NextResponse.json({ error: error.message }, { status: 503 });
+    return NextResponse.json({ ok: true, updatedAt: now });
   }
-  return NextResponse.json({ ok: true });
+
+  // Compare-and-swap: the WHERE on updated_at makes this atomic — the update
+  // touches 0 rows if another session wrote since the client last read.
+  const { data: upd, error: updErr } = await sb
+    .from("app_state")
+    .update(row)
+    .eq("id", "default")
+    .eq("updated_at", base)
+    .select("updated_at");
+  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 503 });
+  if (upd && upd.length > 0) return NextResponse.json({ ok: true, updatedAt: now });
+
+  // 0 rows updated: either the row was changed under us (conflict) or it's gone.
+  const { data: cur, error: curErr } = await sb
+    .from("app_state")
+    .select("input, scenarios, ap_adjustments, updated_at")
+    .eq("id", "default")
+    .maybeSingle();
+  if (curErr) return NextResponse.json({ error: curErr.message }, { status: 503 });
+  if (!cur) {
+    // Row vanished — recreate it.
+    const { error: insErr } = await sb.from("app_state").insert(row);
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 503 });
+    return NextResponse.json({ ok: true, updatedAt: now });
+  }
+  // Conflict: hand back the current doc so the client can rebase onto it.
+  return NextResponse.json(
+    {
+      error: "conflict",
+      current: {
+        input: cur.input,
+        scenarios: cur.scenarios ?? [],
+        adjustments: cur.ap_adjustments ?? {},
+        updatedAt: cur.updated_at ?? null,
+      },
+    },
+    { status: 409 },
+  );
 }

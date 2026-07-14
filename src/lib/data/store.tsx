@@ -121,6 +121,16 @@ function initialState(): AppState {
   return { input: SEED_INPUT, scenarios: SEED_SCENARIOS, prefs: DEFAULT_PREFS, adjustments: {} };
 }
 
+/**
+ * The forecast always starts "now": if a stored anchor trails today (a prior
+ * day/session), roll it forward. Starting cash is dated separately
+ * (balanceAsOf) and prompted for refresh via the reconcile banner.
+ */
+function withCurrentAnchor(input: ForecastInput): ForecastInput {
+  const today = todayISO();
+  return input.anchorDate < today ? { ...input, anchorDate: today } : input;
+}
+
 // AR invoice categories that QuickBooks owns when connected.
 const QBO_AR_CATEGORIES = new Set(["currentAR", "overdueAR"]);
 // AP categories that Bill.com owns when synced (apEstimate stays manual).
@@ -130,7 +140,14 @@ interface CloudDoc {
   input: ForecastInput | null;
   scenarios?: Scenario[];
   adjustments?: Record<string, Adjustment>;
+  /** Server version stamp, used for optimistic-concurrency saves. */
+  updatedAt?: string | null;
 }
+
+type SaveResult =
+  | { status: "ok"; updatedAt: string | null }
+  | { status: "conflict"; current: CloudDoc }
+  | { status: "error" };
 
 function readLocal(): Partial<AppState> | null {
   try {
@@ -141,20 +158,39 @@ function readLocal(): Partial<AppState> | null {
   }
 }
 
-async function putCloud(state: Pick<AppState, "input" | "scenarios" | "adjustments">): Promise<boolean> {
+function saveBody(
+  state: Pick<AppState, "input" | "scenarios" | "adjustments">,
+  baseUpdatedAt: string | null,
+): string {
+  return JSON.stringify({
+    input: state.input,
+    scenarios: state.scenarios,
+    adjustments: state.adjustments,
+    baseUpdatedAt,
+  });
+}
+
+async function putCloud(
+  state: Pick<AppState, "input" | "scenarios" | "adjustments">,
+  baseUpdatedAt: string | null,
+): Promise<SaveResult> {
   try {
     const res = await fetch("/api/app-state", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        input: state.input,
-        scenarios: state.scenarios,
-        adjustments: state.adjustments,
-      }),
+      body: saveBody(state, baseUpdatedAt),
     });
-    return res.ok;
+    if (res.status === 409) {
+      const body = (await res.json().catch(() => ({}))) as { current?: CloudDoc };
+      return body.current
+        ? { status: "conflict", current: body.current }
+        : { status: "error" };
+    }
+    if (!res.ok) return { status: "error" };
+    const body = (await res.json().catch(() => ({}))) as { updatedAt?: string | null };
+    return { status: "ok", updatedAt: body.updatedAt ?? null };
   } catch {
-    return false;
+    return { status: "error" };
   }
 }
 
@@ -167,6 +203,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [syncedAp, setSyncedAp] = useState<CashEvent[] | null>(null);
   const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Optimistic-concurrency + reliable-save bookkeeping (all refs so they're
+  // current inside async saves and window event handlers without re-rendering).
+  const baseUpdatedAtRef = useRef<string | null>(null); // last server version we've seen
+  const stateRef = useRef<AppState>(state); // latest state for flush-on-hide
+  const dirtyRef = useRef(false); // an unsaved cloud change is pending
+  const suppressSaveRef = useRef(false); // skip the cloud save for a programmatic adopt
+  stateRef.current = state;
 
   // Load: cloud first; migrate localStorage up on first cloud run; else local.
   useEffect(() => {
@@ -183,6 +226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           mode = "cloud";
           const doc = (await res.json()) as CloudDoc;
           if (doc.input) {
+            baseUpdatedAtRef.current = doc.updatedAt ?? null;
             next = {
               input: doc.input,
               scenarios: doc.scenarios ?? [],
@@ -195,7 +239,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ? { input: ls.input, scenarios: ls.scenarios ?? [], adjustments: ls.adjustments ?? {} }
               : { input: SEED_INPUT, scenarios: SEED_SCENARIOS, adjustments: {} };
             next = { ...base, prefs };
-            void putCloud(base);
+            const res2 = await putCloud(base, null);
+            if (res2.status === "ok") baseUpdatedAtRef.current = res2.updatedAt;
           }
         }
       } catch {
@@ -207,14 +252,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? { input: ls.input, scenarios: ls.scenarios ?? [], adjustments: ls.adjustments ?? {}, prefs }
           : { ...initialState(), prefs };
       }
-      // The forecast always starts "now": if the stored anchor is behind today
-      // (a prior day or session), roll it forward. Starting cash is dated
-      // separately (balanceAsOf) and prompted for update when it trails the
-      // anchor — see the reconcile banner on the dashboard.
-      const today = todayISO();
-      if (next.input.anchorDate < today) {
-        next = { ...next, input: { ...next.input, anchorDate: today } };
-      }
+      const rolled = withCurrentAnchor(next.input);
+      const anchorRolled = rolled !== next.input;
+      next = { ...next, input: rolled };
+      // Skip the redundant cloud write the persist effect would otherwise fire
+      // for freshly-loaded data — unless we rolled the anchor forward, which is
+      // a real change worth persisting (and safe now, carrying the loaded base).
+      suppressSaveRef.current = mode === "cloud" && !anchorRolled;
       if (!cancelled) {
         setState(next);
         setStorageMode(mode);
@@ -263,6 +307,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void refreshBill();
   }, [refreshQbo, refreshBill]);
 
+  // Replace the local workspace with the server's copy (a newer version another
+  // session saved). Marked to suppress the write the resulting state change
+  // would otherwise trigger — we just took this from the server. Prefs are
+  // personal (localStorage) and left alone.
+  const adoptServer = useCallback((doc: CloudDoc) => {
+    if (!doc.input) return;
+    baseUpdatedAtRef.current = doc.updatedAt ?? baseUpdatedAtRef.current;
+    dirtyRef.current = false;
+    suppressSaveRef.current = true;
+    setState((s) => ({
+      ...s,
+      input: withCurrentAnchor(doc.input!),
+      scenarios: doc.scenarios ?? [],
+      adjustments: doc.adjustments ?? {},
+    }));
+  }, []);
+
+  // Push the latest snapshot to the cloud with the optimistic-concurrency base.
+  // On a conflict (a fresher save landed since we loaded) we rebase onto the
+  // server's copy instead of clobbering it — the fix for a stale tab reverting
+  // another session's edits.
+  const flushSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const res = await putCloud(stateRef.current, baseUpdatedAtRef.current);
+    if (res.status === "ok") {
+      dirtyRef.current = false;
+      baseUpdatedAtRef.current = res.updatedAt;
+    } else if (res.status === "conflict") {
+      adoptServer(res.current);
+    }
+    // error → leave dirty; the next change or window-focus refetch will retry.
+  }, [adoptServer]);
+
   // Persist on change: localStorage always (offline fallback), cloud debounced.
   useEffect(() => {
     if (!ready) return;
@@ -272,14 +352,78 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       /* storage unavailable — non-fatal */
     }
     if (storageMode !== "cloud") return;
+    if (suppressSaveRef.current) {
+      suppressSaveRef.current = false; // this state came from load/adopt — don't echo it back
+      return;
+    }
+    dirtyRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      void putCloud(state);
-    }, SAVE_DEBOUNCE_MS);
+    saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state, ready, storageMode]);
+  }, [state, ready, storageMode, flushSave]);
+
+  // Converge open tabs: when this tab regains focus / becomes visible, pull the
+  // latest cloud version. Adopt it only if it's newer AND we have no unsaved
+  // local edit in flight (never stomp the user's own pending work — that save
+  // will go out and resolve any conflict on its own).
+  useEffect(() => {
+    if (!ready || storageMode !== "cloud") return;
+    const refetch = async () => {
+      if (dirtyRef.current) return;
+      try {
+        const res = await fetch("/api/app-state", { cache: "no-store" });
+        if (!res.ok) return;
+        const doc = (await res.json()) as CloudDoc;
+        if (doc.input && doc.updatedAt && doc.updatedAt !== baseUpdatedAtRef.current) {
+          adoptServer(doc);
+        }
+      } catch {
+        /* offline — keep what we have */
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refetch();
+    };
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [ready, storageMode, adoptServer]);
+
+  // Reliable last-mile save: if the tab is hidden/closed with a pending change,
+  // flush it immediately with a keepalive request so a confirm-then-close
+  // within the debounce window still reaches the cloud. Best-effort (the
+  // debounced save and localStorage remain the primary paths).
+  useEffect(() => {
+    if (!ready || storageMode !== "cloud") return;
+    const flushBeacon = () => {
+      if (!dirtyRef.current) return;
+      dirtyRef.current = false;
+      try {
+        void fetch("/api/app-state", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: saveBody(stateRef.current, baseUpdatedAtRef.current),
+          keepalive: true,
+        });
+      } catch {
+        /* nothing more we can do on unload */
+      }
+    };
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") flushBeacon();
+    };
+    window.addEventListener("pagehide", flushBeacon);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", flushBeacon);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+  }, [ready, storageMode]);
 
   const setInput = useCallback(
     (updater: (prev: ForecastInput) => ForecastInput) =>
