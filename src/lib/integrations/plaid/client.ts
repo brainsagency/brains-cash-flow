@@ -50,9 +50,25 @@ function plaidClient(): PlaidApi {
 }
 
 /**
- * Create a Link token for the browser widget. `Auth` is requested because it
- * covers account balances + masks and is broadly supported; change the product
- * list if your Plaid account has a different one enabled.
+ * Products requested at Link time. Defaults to `balance` — the balance-only
+ * product, which is what this integration uses and avoids needing Auth (account
+ * numbers) or Transactions enabled on your Plaid account. Override with
+ * `PLAID_PRODUCTS` (comma-separated) if your account has a different product
+ * enabled, e.g. `PLAID_PRODUCTS=transactions`.
+ */
+function linkProducts(): Products[] {
+  const raw = process.env.PLAID_PRODUCTS;
+  if (!raw) return [Products.Balance];
+  const valid = new Set(Object.values(Products) as string[]);
+  const chosen = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => valid.has(s)) as Products[];
+  return chosen.length ? chosen : [Products.Balance];
+}
+
+/**
+ * Create a Link token for the browser widget.
  *
  * `PLAID_REDIRECT_URI` is required for OAuth institutions (Chase, Wells Fargo,
  * Capital One, …): Plaid sends the user to the bank and back to this exact URL,
@@ -66,7 +82,7 @@ export async function createLinkToken(): Promise<string> {
     const resp = await client.linkTokenCreate({
       user: { client_user_id: "brains-cashflow" },
       client_name: "Brains Cash Flow",
-      products: [Products.Auth],
+      products: linkProducts(),
       country_codes: [CountryCode.Us],
       language: "en",
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),

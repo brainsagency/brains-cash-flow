@@ -13,10 +13,11 @@ No transactions are pulled (yet). This only reads `/accounts/balance/get`.
    and the **secret for the environment you're using** (the secret differs
    between Sandbox and Production). Plaid retired the standalone *development*
    environment — use **production** for live banks.
-2. Ensure the product used at Link time is enabled on your Plaid account. We
-   request **Auth** (covers balances + account mask); if your account has a
-   different product enabled, change `products` in
-   `src/lib/integrations/plaid/client.ts`.
+2. Product: we request **`balance`** (the balance-only product), so you don't
+   need Auth or Transactions enabled. If Link errors with "not enabled for
+   balance" (or you'd rather use another enabled product), set
+   `PLAID_PRODUCTS=transactions` (comma-separated list). Request products you're
+   missing at https://dashboard.plaid.com/overview/request-products.
 3. Add to `.env.local` (never commit real secrets):
 
    ```
