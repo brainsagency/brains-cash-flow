@@ -15,6 +15,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { CashEvent } from "@engine/index.js";
 import type { ApReconciliation } from "./billdotcom/reconcile.js";
+import type { PlaidAccountBalance } from "./plaid/map.js";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase.js";
 
 export interface QboConnection {
@@ -23,6 +24,17 @@ export interface QboConnection {
   refreshToken: string;
   accessTokenExpiresAt: number; // epoch ms
   connectedAt: string;
+}
+
+export interface PlaidConnection {
+  accessToken: string;
+  itemId: string;
+  connectedAt: string;
+}
+
+export interface BankSyncResult {
+  syncedAt: string;
+  accounts: PlaidAccountBalance[];
 }
 
 export interface QboSyncResult {
@@ -43,13 +55,15 @@ export interface BillSyncResult {
 }
 
 export interface SyncLogEntry {
-  source: "qbo" | "billdotcom";
+  source: "qbo" | "billdotcom" | "bank";
   startedAt: string;
   finishedAt: string;
   status: "ok" | "error";
   message?: string;
   arCount?: number;
   apCount?: number;
+  /** Bank sync: number of accounts whose balance was pulled. */
+  accountCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +93,21 @@ export function saveBillSync(r: BillSyncResult): Promise<void> {
 }
 export function getLastBillSync(): Promise<BillSyncResult | null> {
   return isSupabaseConfigured() ? sbGetLastBillSync() : fileGetLastBillSync();
+}
+export function savePlaidConnection(c: PlaidConnection): Promise<void> {
+  return isSupabaseConfigured() ? sbSavePlaidConnection(c) : fileSavePlaidConnection(c);
+}
+export function getPlaidConnection(): Promise<PlaidConnection | null> {
+  return isSupabaseConfigured() ? sbGetPlaidConnection() : fileGetPlaidConnection();
+}
+export function clearPlaidConnection(): Promise<void> {
+  return isSupabaseConfigured() ? sbClearPlaidConnection() : fileClearPlaidConnection();
+}
+export function saveBankSync(r: BankSyncResult): Promise<void> {
+  return isSupabaseConfigured() ? sbSaveBankSync(r) : fileSaveBankSync(r);
+}
+export function getLastBankSync(): Promise<BankSyncResult | null> {
+  return isSupabaseConfigured() ? sbGetLastBankSync() : fileGetLastBankSync();
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +189,7 @@ async function sbAppendLog(e: SyncLogEntry): Promise<void> {
     message: e.message ?? null,
     ar_count: e.arCount ?? null,
     ap_count: e.apCount ?? null,
+    account_count: e.accountCount ?? null,
   });
   if (error) throw new Error(`Supabase appendLog: ${error.message}`);
 }
@@ -193,6 +223,60 @@ async function sbGetLastBillSync(): Promise<BillSyncResult | null> {
   };
 }
 
+async function sbSavePlaidConnection(c: PlaidConnection): Promise<void> {
+  const { error } = await supabaseAdmin().from("plaid_connection").upsert({
+    id: "default",
+    access_token: c.accessToken,
+    item_id: c.itemId,
+    connected_at: c.connectedAt,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(`Supabase savePlaidConnection: ${error.message}`);
+}
+
+async function sbGetPlaidConnection(): Promise<PlaidConnection | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("plaid_connection")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) throw new Error(`Supabase getPlaidConnection: ${error.message}`);
+  if (!data) return null;
+  return {
+    accessToken: data.access_token as string,
+    itemId: data.item_id as string,
+    connectedAt: data.connected_at as string,
+  };
+}
+
+async function sbClearPlaidConnection(): Promise<void> {
+  const { error } = await supabaseAdmin().from("plaid_connection").delete().eq("id", "default");
+  if (error) throw new Error(`Supabase clearPlaidConnection: ${error.message}`);
+}
+
+async function sbSaveBankSync(r: BankSyncResult): Promise<void> {
+  const { error } = await supabaseAdmin().from("bank_last_sync").upsert({
+    id: "default",
+    synced_at: r.syncedAt,
+    accounts: r.accounts,
+  });
+  if (error) throw new Error(`Supabase saveBankSync: ${error.message}`);
+}
+
+async function sbGetLastBankSync(): Promise<BankSyncResult | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("bank_last_sync")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) throw new Error(`Supabase getLastBankSync: ${error.message}`);
+  if (!data) return null;
+  return {
+    syncedAt: data.synced_at as string,
+    accounts: (data.accounts ?? []) as PlaidAccountBalance[],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // File backend (dev fallback)
 // ---------------------------------------------------------------------------
@@ -201,6 +285,8 @@ interface FileShape {
   connection?: QboConnection;
   lastSync?: QboSyncResult;
   billLastSync?: BillSyncResult;
+  plaidConnection?: PlaidConnection;
+  bankLastSync?: BankSyncResult;
   log: SyncLogEntry[];
 }
 
@@ -244,4 +330,21 @@ async function fileSaveBillSync(billLastSync: BillSyncResult): Promise<void> {
 }
 async function fileGetLastBillSync(): Promise<BillSyncResult | null> {
   return (await fileRead()).billLastSync ?? null;
+}
+async function fileSavePlaidConnection(plaidConnection: PlaidConnection): Promise<void> {
+  await fileWrite({ ...(await fileRead()), plaidConnection });
+}
+async function fileGetPlaidConnection(): Promise<PlaidConnection | null> {
+  return (await fileRead()).plaidConnection ?? null;
+}
+async function fileClearPlaidConnection(): Promise<void> {
+  const s = await fileRead();
+  delete s.plaidConnection;
+  await fileWrite(s);
+}
+async function fileSaveBankSync(bankLastSync: BankSyncResult): Promise<void> {
+  await fileWrite({ ...(await fileRead()), bankLastSync });
+}
+async function fileGetLastBankSync(): Promise<BankSyncResult | null> {
+  return (await fileRead()).bankLastSync ?? null;
 }

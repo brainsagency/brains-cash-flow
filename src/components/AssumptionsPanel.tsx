@@ -4,6 +4,7 @@ import { type ForecastInput } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { daysAgo, fmtShortDate, todayISO } from "@/lib/format.js";
 import { MoneyInput } from "@/components/fields.js";
+import { PlaidPanel } from "@/components/PlaidPanel.js";
 
 /**
  * Assumptions & settings — deliberately lean. Everything with a dedicated tab
@@ -174,6 +175,7 @@ function BankAccounts() {
         weeks), hit <b>Confirm</b> to refresh the as-of date without changing the amount. Balances older than{" "}
         {STALE_BALANCE_DAYS} days are flagged.
       </div>
+      <PlaidPanel />
     </Group>
   );
 }
