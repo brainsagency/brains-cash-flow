@@ -101,7 +101,11 @@ export function OperatingExpenses() {
   const all = input.recurring ?? [];
   const opex = all.filter((r) => r.category === OPEX);
   const amex = all.filter((r) => r.category === AMEX);
-  const oneoffs = (input.events ?? []).filter((e) => e.category === OPEX).sort((a, b) => a.date.localeCompare(b.date));
+  const oneoffsAll = (input.events ?? []).filter((e) => e.category === OPEX);
+  // Sort by date for the read view only. While editing, keep insertion order so
+  // a row doesn't jump to a new position (closing the native date picker) the
+  // moment you change its date — that read as "can't edit the date".
+  const oneoffs = editing ? oneoffsAll : [...oneoffsAll].sort((a, b) => a.date.localeCompare(b.date));
 
   const updateItem = (id: string | undefined, patch: Partial<RecurringItem>) =>
     setInput((prev) => ({ ...prev, recurring: (prev.recurring ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
@@ -362,6 +366,6 @@ export function OperatingExpenses() {
 }
 
 const boxInput: CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, background: "#fff", padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14 };
-const rowNameInput: CSSProperties = { ...boxInput, width: "100%", fontWeight: 700 };
+const rowNameInput: CSSProperties = { ...boxInput, width: "100%", maxWidth: 440, fontWeight: 700 };
 const xBtn: CSSProperties = { border: "none", background: "transparent", color: "var(--text-faint)", cursor: "pointer", fontSize: 14, display: "grid", placeItems: "center" };
 const endDateBtn: CSSProperties = { marginTop: 6, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: 12, padding: 0, textAlign: "left" };

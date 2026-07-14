@@ -16,6 +16,7 @@ interface OWRow {
   date: string; // one-off funds-out date
   frequency: RecurringFrequency; // recurring cadence
   startDate: string; // recurring start
+  endDate?: string; // recurring last occurrence (optional; loans / fixed-term)
 }
 
 const FREQUENCIES: RecurringFrequency[] = ["weekly", "biweekly", "semimonthly", "monthly"];
@@ -51,6 +52,7 @@ export function OtherWithdrawals() {
         date: r.startDate,
         frequency: r.frequency,
         startDate: r.startDate,
+        endDate: r.endDate,
       })),
     ...(input.events ?? [])
       .filter((e) => e.category === "otherWithdrawals")
@@ -84,6 +86,7 @@ export function OtherWithdrawals() {
           frequency: r.frequency,
           startDate: r.startDate,
           memo: r.memo,
+          ...(r.endDate ? { endDate: r.endDate } : {}),
         }));
       return { ...prev, events: [...keepEvents, ...owEvents], recurring: [...keepRecurring, ...owRecurring] };
     });
@@ -98,7 +101,9 @@ export function OtherWithdrawals() {
     ]);
 
   const meta = (r: OWRow) =>
-    r.kind === "recurring" ? `${FREQ_LABEL[r.frequency]} from ${fmtShortDate(r.startDate)}` : fmtShortDate(r.date);
+    r.kind === "recurring"
+      ? `${FREQ_LABEL[r.frequency]} from ${fmtShortDate(r.startDate)}${r.endDate ? ` until ${fmtShortDate(r.endDate)}` : ""}`
+      : fmtShortDate(r.date);
 
   return (
     <div className="card">
@@ -141,7 +146,7 @@ export function OtherWithdrawals() {
           <div
             className="ow-row"
             key={r.id}
-            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) 120px 110px 200px auto", gap: 8, alignItems: "end", marginBottom: 8, minWidth: 600 }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) 120px 110px 320px auto", gap: 8, alignItems: "end", marginBottom: 8, minWidth: 720 }}
           >
             <div className="field">
               <label>Description</label>
@@ -164,7 +169,7 @@ export function OtherWithdrawals() {
                 <input type="date" value={r.date} onChange={(e) => update(r.id, { date: e.target.value })} />
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                 <div className="field">
                   <label>Every</label>
                   <select value={r.frequency} onChange={(e) => update(r.id, { frequency: e.target.value as RecurringFrequency })}>
@@ -176,6 +181,10 @@ export function OtherWithdrawals() {
                 <div className="field">
                   <label>Starting</label>
                   <input type="date" value={r.startDate} onChange={(e) => update(r.id, { startDate: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Ends (optional)</label>
+                  <input type="date" min={r.startDate} value={r.endDate ?? ""} onChange={(e) => update(r.id, { endDate: e.target.value || undefined })} />
                 </div>
               </div>
             )}
