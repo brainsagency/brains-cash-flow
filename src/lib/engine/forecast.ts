@@ -91,6 +91,14 @@ export function collectEvents(input: ForecastInput, horizonEnd: ISODate): CashEv
     events.push(...pipelineToEvents(deal));
   }
 
+  // Drop payroll runs that already cleared the bank (their cash is baked into
+  // the starting balance) so they aren't subtracted again. Covers roster-
+  // derived, manual, and severance/final-pay — all carry the `payroll` category.
+  const paidThrough = input.payrollPaidThrough;
+  if (paidThrough) {
+    return events.filter((e) => !(e.category === "payroll" && e.date <= paidThrough));
+  }
+
   return events;
 }
 

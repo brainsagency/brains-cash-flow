@@ -16,6 +16,10 @@ function base(overrides: Partial<ForecastInput> = {}): ForecastInput {
   };
 }
 
+function sumPayroll(result: ReturnType<typeof forecast>): number {
+  return result.periods.reduce((s, p) => s + p.disbursements.payroll, 0);
+}
+
 describe("forecast — balances", () => {
   it("rolls beginning → received → spent → ending across periods", () => {
     const result = forecast(
@@ -37,6 +41,21 @@ describe("forecast — balances", () => {
     expect(w1.beginningBalance).toBe(150_000);
     expect(w1.disbursements.payroll).toBe(30_000);
     expect(w1.endingBalance).toBe(120_000);
+  });
+
+  it("drops payroll on or before payrollPaidThrough (already-cleared runs)", () => {
+    const events = [
+      { category: "payroll" as const, amount: 30_000, date: "2026-07-15" }, // already paid
+      { category: "payroll" as const, amount: 30_000, date: "2026-08-01" }, // still upcoming
+      { category: "operatingExpense" as const, amount: 5_000, date: "2026-07-15" }, // not payroll — kept
+    ];
+    const withCutoff = forecast(base({ events, payrollPaidThrough: "2026-07-15" }));
+    const withoutCutoff = forecast(base({ events }));
+
+    // The 7/15 payroll is suppressed; the 8/1 run and the opex are untouched.
+    expect(sumPayroll(withCutoff)).toBe(30_000);
+    expect(sumPayroll(withoutCutoff)).toBe(60_000);
+    expect(withCutoff.periods.reduce((s, p) => s + p.disbursements.operatingExpense, 0)).toBe(5_000);
   });
 
   it("sums operating accounts into starting cash", () => {

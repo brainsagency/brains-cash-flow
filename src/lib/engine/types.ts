@@ -311,6 +311,15 @@ export interface ForecastInput {
   /** Toggle for pipeline revenue (matches the sheet's pipeline toggle). */
   includePipeline?: boolean;
   /**
+   * Payroll reconciliation cutoff: any `payroll` disbursement dated on or
+   * before this date is treated as already paid (its cash has left the bank and
+   * is baked into the starting balance) and is dropped from the forecast, so a
+   * run that already cleared isn't subtracted a second time. Payroll often
+   * debits a day or two before the pay date, so set this to the pay date of the
+   * last run that actually cleared. Omit to count every scheduled run.
+   */
+  payrollPaidThrough?: ISODate;
+  /**
    * Include `budgeted`-basis streams (planned salaries/opex from the financial
    * model). Defaults to false: the official forecast is committed-only. Turn on
    * to see the model's plan flow through to cash.

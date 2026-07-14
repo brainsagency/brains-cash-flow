@@ -40,6 +40,8 @@ export function StaffRoster() {
   const [editing, setEditing] = useState(false);
 
   const write = (next: StaffMember[]) => setInput((prev: ForecastInput) => ({ ...prev, staff: next }));
+  const paidThrough = input.payrollPaidThrough;
+  const setPaidThrough = (v: string) => setInput((prev: ForecastInput) => ({ ...prev, payrollPaidThrough: v || undefined }));
   const setLoad = (pct: number) => setInput((prev: ForecastInput) => ({ ...prev, staffLoadFactor: Math.max(1, 1 + (pct || 0) / 100) }));
   const update = (i: number, patch: Partial<StaffMember>) => write(staff.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   const remove = (i: number) => write(staff.filter((_, idx) => idx !== i));
@@ -70,6 +72,26 @@ export function StaffRoster() {
           Payroll line. To model a departure as an <b style={{ color: "#4a4a4a" }}>actual</b>, set a Term date (and any
           severance / vacation payout): pay stops and those cash-outs land on that date. Hypothetical cuts belong in Scenarios.
         </p>
+
+        {/* Payroll reconciliation: mark runs already pulled so a run that
+            already left the bank isn't subtracted again by the forecast. */}
+        <div>
+          <div style={{ ...eyebrow, marginBottom: 6 }}>Payroll already paid through</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input
+              type="date"
+              value={paidThrough ?? ""}
+              onChange={(e) => setPaidThrough(e.target.value)}
+              style={{ border: "1px solid var(--border)", borderRadius: 8, background: "#fff", padding: "7px 9px", fontFamily: "var(--font-body)", fontSize: 14 }}
+            />
+            {paidThrough && <button style={editLink} onClick={() => setPaidThrough("")}>Clear</button>}
+            <span style={{ fontSize: 12.5, color: "var(--text-dim)", maxWidth: 640, lineHeight: 1.5 }}>
+              Runs on or before this date are treated as already paid and dropped from the forecast. Payroll often debits a
+              day or two early, so set it to the pay date of the last run that cleared (e.g. the 15th) — otherwise a run
+              that already left the bank gets counted twice.
+            </span>
+          </div>
+        </div>
 
         {/* Employer load */}
         <div>
