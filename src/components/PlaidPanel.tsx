@@ -102,6 +102,17 @@ export function PlaidPanel() {
         setBusy(false);
       }
     },
+    // Surface why Link closed (e.g. an OAuth/redirect-uri config error) instead
+    // of the modal just vanishing with no feedback.
+    onExit: (err) => {
+      if (err) {
+        setError(
+          err.display_message ||
+            err.error_message ||
+            `Plaid Link exited: ${err.error_code ?? err.error_type ?? "unknown"}`,
+        );
+      }
+    },
   });
 
   // Open Link as soon as we have a token and the widget is ready.
