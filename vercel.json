@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/sync/qbo", "schedule": "0 10 * * *" },
-    { "path": "/api/sync/billdotcom", "schedule": "10 10 * * *" }
+    { "path": "/api/sync/billdotcom", "schedule": "10 10 * * *" },
+    { "path": "/api/sync/bank", "schedule": "20 10 * * *" }
   ]
 }
