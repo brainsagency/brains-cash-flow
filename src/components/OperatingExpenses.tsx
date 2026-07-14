@@ -177,10 +177,25 @@ export function OperatingExpenses() {
             ) : (
               <div style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{r.memo || "Unnamed expense"}</div>
             )}
-            <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>
-              {cadence(r)}
-              {!editing && r.endDate && <span style={{ color: "var(--text-faint)" }}> · Ends {fmtShortDate(r.endDate)}</span>}
-            </div>
+            {editing && r.frequency === "monthly" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+                <span>Monthly · day</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={dayOf(r.startDate)}
+                  onChange={(e) => updateItem(r.id, { startDate: withDay(r.startDate, Number(e.target.value)) })}
+                  title="Day of the month the bill hits"
+                  style={{ ...boxInput, width: 52, padding: "4px 8px", fontSize: 13 }}
+                />
+              </div>
+            ) : (
+              <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>
+                {cadence(r)}
+                {!editing && r.endDate && <span style={{ color: "var(--text-faint)" }}> · Ends {fmtShortDate(r.endDate)}</span>}
+              </div>
+            )}
             {editing && (
               r.endDate ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
