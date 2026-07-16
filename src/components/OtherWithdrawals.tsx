@@ -1,23 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import type { CashEvent, RecurringFrequency, RecurringItem } from "@engine/index.js";
+import type { CashCategory, CashEvent, RecurringFrequency, RecurringItem } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
 import { MoneyInput } from "@/components/fields.js";
 
 type Kind = "oneoff" | "recurring";
+type Dir = "out" | "in";
 
 interface OWRow {
   id: string;
   kind: Kind;
+  direction: Dir; // out = withdrawal, in = reimbursement / cost-sharing inflow
   memo: string;
   amount: number;
-  date: string; // one-off funds-out date
+  date: string; // one-off date
   frequency: RecurringFrequency; // recurring cadence
   startDate: string; // recurring start
   endDate?: string; // recurring last occurrence (optional; loans / fixed-term)
 }
+
+// Money out lives on the manual `otherWithdrawals` disbursement line; money in
+// (cost-sharing reimbursements, e.g. from Mass Culture) rides the manual
+// `notInvoiced` receipt line — the one receipt category the QuickBooks sync
+// doesn't overwrite, so a manual inflow survives a re-sync.
+const OUT_CAT: CashCategory = "otherWithdrawals";
+const IN_CAT: CashCategory = "notInvoiced";
+const catOf = (d: Dir): CashCategory => (d === "in" ? IN_CAT : OUT_CAT);
+const INFLOW = "#1a7f37";
 
 const FREQUENCIES: RecurringFrequency[] = ["weekly", "biweekly", "semimonthly", "monthly"];
 const FREQ_LABEL: Record<RecurringFrequency, string> = {
@@ -40,13 +51,15 @@ export function OtherWithdrawals() {
   const anchor = input.anchorDate;
   const [editing, setEditing] = useState(false);
 
-  // Derive the unified row list from both storage arrays (recurring first).
+  // Derive the unified row list from both storage arrays (recurring first),
+  // pulling both the outflow (otherWithdrawals) and inflow (notInvoiced) slices.
   const rows: OWRow[] = [
     ...(input.recurring ?? [])
-      .filter((r) => r.category === "otherWithdrawals")
+      .filter((r) => r.category === OUT_CAT || r.category === IN_CAT)
       .map((r) => ({
         id: r.id ?? newId(),
         kind: "recurring" as const,
+        direction: (r.category === IN_CAT ? "in" : "out") as Dir,
         memo: r.memo ?? "",
         amount: r.amount,
         date: r.startDate,
@@ -55,10 +68,11 @@ export function OtherWithdrawals() {
         endDate: r.endDate,
       })),
     ...(input.events ?? [])
-      .filter((e) => e.category === "otherWithdrawals")
+      .filter((e) => e.category === OUT_CAT || e.category === IN_CAT)
       .map((e) => ({
         id: e.id ?? newId(),
         kind: "oneoff" as const,
+        direction: (e.category === IN_CAT ? "in" : "out") as Dir,
         memo: e.memo ?? "",
         amount: e.amount,
         date: e.date,
@@ -67,21 +81,23 @@ export function OtherWithdrawals() {
       })),
   ];
 
-  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const totalOut = rows.filter((r) => r.direction === "out").reduce((s, r) => s + r.amount, 0);
+  const totalIn = rows.filter((r) => r.direction === "in").reduce((s, r) => s + r.amount, 0);
+  const net = totalOut - totalIn; // net cash drain from these manual items
 
-  // Persist: rebuild the otherWithdrawals slices of events + recurring.
+  // Persist: rebuild the otherWithdrawals + notInvoiced slices of events + recurring.
   const writeRows = (next: OWRow[]) =>
     setInput((prev) => {
-      const keepEvents = (prev.events ?? []).filter((e) => e.category !== "otherWithdrawals");
-      const keepRecurring = (prev.recurring ?? []).filter((r) => r.category !== "otherWithdrawals");
+      const keepEvents = (prev.events ?? []).filter((e) => e.category !== OUT_CAT && e.category !== IN_CAT);
+      const keepRecurring = (prev.recurring ?? []).filter((r) => r.category !== OUT_CAT && r.category !== IN_CAT);
       const owEvents: CashEvent[] = next
         .filter((r) => r.kind === "oneoff")
-        .map((r) => ({ id: r.id, category: "otherWithdrawals", amount: r.amount, date: r.date, memo: r.memo }));
+        .map((r) => ({ id: r.id, category: catOf(r.direction), amount: r.amount, date: r.date, memo: r.memo }));
       const owRecurring: RecurringItem[] = next
         .filter((r) => r.kind === "recurring")
         .map((r) => ({
           id: r.id,
-          category: "otherWithdrawals",
+          category: catOf(r.direction),
           amount: r.amount,
           frequency: r.frequency,
           startDate: r.startDate,
@@ -94,10 +110,10 @@ export function OtherWithdrawals() {
   const update = (id: string, patch: Partial<OWRow>) =>
     writeRows(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const remove = (id: string) => writeRows(rows.filter((r) => r.id !== id));
-  const add = () =>
+  const add = (direction: Dir = "out") =>
     writeRows([
       ...rows,
-      { id: newId(), kind: "oneoff", memo: "", amount: 0, date: anchor, frequency: "monthly", startDate: anchor },
+      { id: newId(), kind: "oneoff", direction, memo: "", amount: 0, date: anchor, frequency: "monthly", startDate: anchor },
     ]);
 
   const meta = (r: OWRow) =>
@@ -108,9 +124,9 @@ export function OtherWithdrawals() {
   return (
     <div className="card">
       <div className="row" style={{ marginBottom: 6 }}>
-        <h2 style={{ margin: 0, textTransform: "none", fontSize: 15, color: "var(--text)" }}>Other Withdrawals</h2>
+        <h2 style={{ margin: 0, textTransform: "none", fontSize: 15, color: "var(--text)" }}>Other Withdrawals &amp; Reimbursements</h2>
         <div className="spacer" />
-        <span className="pill-total mono" style={{ marginRight: 10 }}>{fmtMoney(total)}</span>
+        <span className="pill-total mono" style={{ marginRight: 10 }} title="Net cash effect (withdrawals out − reimbursements in)">{fmtMoney(net)}</span>
         {rows.length > 0 && (
           <button className="btn sm ghost" onClick={() => setEditing((v) => !v)}>
             {editing ? "Done" : "Edit"}
@@ -118,8 +134,9 @@ export function OtherWithdrawals() {
         )}
       </div>
       <div className="muted" style={{ marginBottom: 14 }}>
-        Cash outflows that aren&apos;t operating expense on the books — owner distributions, tax set-asides, and
-        recurring payments (e.g. Brandy). These stay manual; recurring amounts are per occurrence.
+        Manual cash movements that aren&apos;t on the books — <b>money out</b> (owner distributions, tax set-asides,
+        recurring payments like Brandy) and <b>money in</b> (cost-sharing reimbursements, e.g. Mass Culture&apos;s share
+        of split payroll). Recurring amounts are per occurrence. The total shows the net drain (out − in).
       </div>
 
       {rows.length === 0 && <div className="muted" style={{ marginBottom: 12 }}>Nothing yet — add your first below.</div>}
@@ -130,10 +147,10 @@ export function OtherWithdrawals() {
           <div className="spec-row" key={r.id}>
             <span className="label">
               {r.memo || <span className="muted">Unlabeled</span>}
-              <span className="meta">{meta(r)}</span>
+              <span className="meta">{meta(r)}{r.direction === "in" ? " · reimbursement" : ""}</span>
             </span>
-            <span className="val mono">
-              {fmtMoney(r.amount, { cents: true })}
+            <span className="val mono" style={r.direction === "in" ? { color: INFLOW } : undefined}>
+              {r.direction === "in" ? "+" : ""}{fmtMoney(r.amount, { cents: true })}
               {r.kind === "recurring" && <span className="sub">/ea</span>}
             </span>
           </div>
@@ -146,15 +163,22 @@ export function OtherWithdrawals() {
           <div
             className="ow-row"
             key={r.id}
-            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) 120px 110px 320px auto", gap: 8, alignItems: "end", marginBottom: 8, minWidth: 720 }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.4fr) 110px 104px 96px 300px auto", gap: 8, alignItems: "end", marginBottom: 8, minWidth: 820 }}
           >
             <div className="field">
               <label>Description</label>
-              <input value={r.memo} placeholder="e.g. Owner distribution" onChange={(e) => update(r.id, { memo: e.target.value })} />
+              <input value={r.memo} placeholder={r.direction === "in" ? "e.g. MC payroll reimbursement" : "e.g. Owner distribution"} onChange={(e) => update(r.id, { memo: e.target.value })} />
             </div>
             <div className="field">
               <label>Amount</label>
               <MoneyInput value={r.amount} onChange={(n) => update(r.id, { amount: n })} />
+            </div>
+            <div className="field">
+              <label>Direction</label>
+              <select value={r.direction} onChange={(e) => update(r.id, { direction: e.target.value as Dir })}>
+                <option value="out">Money out</option>
+                <option value="in">Money in</option>
+              </select>
             </div>
             <div className="field">
               <label>Kind</label>
@@ -165,7 +189,7 @@ export function OtherWithdrawals() {
             </div>
             {r.kind === "oneoff" ? (
               <div className="field">
-                <label>Funds out</label>
+                <label>{r.direction === "in" ? "Funds in" : "Funds out"}</label>
                 <input type="date" value={r.date} onChange={(e) => update(r.id, { date: e.target.value })} />
               </div>
             ) : (
@@ -195,12 +219,13 @@ export function OtherWithdrawals() {
       )}
 
       {editing && (
-        <button className="btn sm" onClick={add} style={{ marginTop: 6 }}>
-          + Add other withdrawal
-        </button>
+        <div className="row" style={{ gap: 8, marginTop: 6 }}>
+          <button className="btn sm" onClick={() => add("out")}>+ Add withdrawal</button>
+          <button className="btn sm ghost" onClick={() => add("in")}>+ Add reimbursement</button>
+        </div>
       )}
       {!editing && rows.length === 0 && (
-        <button className="btn sm" onClick={() => { setEditing(true); add(); }} style={{ marginTop: 6 }}>
+        <button className="btn sm" onClick={() => { setEditing(true); add("out"); }} style={{ marginTop: 6 }}>
           + Add other withdrawal
         </button>
       )}
