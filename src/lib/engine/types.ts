@@ -26,6 +26,7 @@ export type DisbursementCategory =
   | "payroll"
   | "operatingExpense"
   | "amex" // American Express
+  | "freelance" // freelance / contractor budget (own line, budget vs. actual)
   | "otherWithdrawals" // manual judgment items (owner distributions, Brandy, etc.)
   | "accountsPayable" // known bills (Bill.com)
   | "apEstimate" // estimate for not-yet-entered bills
@@ -56,6 +57,7 @@ export const DISBURSEMENT_CATEGORIES: readonly DisbursementCategory[] = [
   "payroll",
   "operatingExpense",
   "amex",
+  "freelance",
   "otherWithdrawals",
   "accountsPayable",
   "apEstimate",

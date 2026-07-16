@@ -40,6 +40,7 @@ function emptyDisbursements(): DisbursementBreakdown {
     payroll: 0,
     operatingExpense: 0,
     amex: 0,
+    freelance: 0,
     otherWithdrawals: 0,
     accountsPayable: 0,
     apEstimate: 0,

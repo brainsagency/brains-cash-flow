@@ -20,6 +20,7 @@ import { MoneyInput } from "@/components/fields.js";
 
 const OPEX = "operatingExpense" as const;
 const AMEX = "amex" as const;
+const FREELANCE = "freelance" as const;
 const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function dayOf(startDate: string): number {
@@ -101,6 +102,7 @@ export function OperatingExpenses() {
   const all = input.recurring ?? [];
   const opex = all.filter((r) => r.category === OPEX);
   const amex = all.filter((r) => r.category === AMEX);
+  const freelance = all.filter((r) => r.category === FREELANCE);
   const oneoffsAll = (input.events ?? []).filter((e) => e.category === OPEX);
   // Sort by date for the read view only. While editing, keep insertion order so
   // a row doesn't jump to a new position (closing the native date picker) the
@@ -121,6 +123,11 @@ export function OperatingExpenses() {
       ...prev,
       recurring: [...(prev.recurring ?? []), { id: `amex-${Date.now()}`, category: AMEX, amount: 0, frequency: "monthly", startDate: `${anchorPrefix}-06`, basis: "committed", memo: "New card" }],
     }));
+  const addFreelance = () =>
+    setInput((prev) => ({
+      ...prev,
+      recurring: [...(prev.recurring ?? []), { id: `freelance-${Date.now()}`, category: FREELANCE, amount: 0, frequency: "monthly", startDate: `${anchorPrefix}-01`, basis: "committed", memo: "Freelance budget" }],
+    }));
   const updateEvent = (id: string | undefined, patch: Partial<CashEvent>) =>
     setInput((prev) => ({ ...prev, events: (prev.events ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
   const removeEvent = (id: string | undefined) =>
@@ -140,8 +147,9 @@ export function OperatingExpenses() {
   const monthlySum = monthlyItems.reduce((s, r) => s + r.amount, 0);
   const otherMo = otherItems.reduce((s, r) => s + monthlyEquivalent(r), 0);
   const cardsBudget = amex.reduce((s, c) => s + c.amount, 0);
+  const freelanceBudget = freelance.reduce((s, c) => s + c.amount, 0);
   const recurringMo = monthlySum + otherMo;
-  const total = recurringMo + cardsBudget;
+  const total = recurringMo + cardsBudget + freelanceBudget;
   const oneoffTotal = oneoffs.reduce((s, e) => s + e.amount, 0);
 
   const chip = (label: string, val: string) => (
@@ -222,6 +230,86 @@ export function OperatingExpenses() {
     </div>
   );
 
+  // ---- card-style budget group (monthly budget + per-month actuals) ----
+  // Shared by Company cards (AmEx) and Freelance, which model the same way.
+  const cardGroup = (
+    items: RecurringItem[],
+    opts: { title: string; subtitle: string; addLabel: string; onAdd: () => void; emptyText: string; itemLabel: string },
+  ) => (
+    <div style={CARD}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Eyebrow color="var(--text)">{opts.title}</Eyebrow>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{opts.subtitle}</span>
+        </div>
+        <AddButton label={opts.addLabel} onClick={opts.onAdd} />
+      </div>
+      {items.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>{opts.emptyText}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {items.map((c) => {
+          const open = openCards.has(c.id ?? "");
+          const nOv = Object.keys(c.overrides ?? {}).length;
+          return (
+            <div key={c.id} style={{ border: "1px solid var(--border)", borderRadius: 12, background: "var(--bg)", padding: "16px 18px" }}>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 240px", minWidth: 180 }}>
+                  <Eyebrow>{opts.itemLabel}</Eyebrow>
+                  {editing ? (
+                    <input value={c.memo ?? ""} placeholder={`${opts.itemLabel} name`} onChange={(e) => updateItem(c.id, { memo: e.target.value })} style={{ ...boxInput, width: "100%", marginTop: 5 }} />
+                  ) : (
+                    <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4 }}>{c.memo || opts.itemLabel}</div>
+                  )}
+                </div>
+                <div>
+                  <Eyebrow>Due day</Eyebrow>
+                  {editing ? (
+                    <input type="number" min={1} max={31} value={dayOf(c.startDate)} onChange={(e) => updateItem(c.id, { startDate: withDay(c.startDate, Number(e.target.value)) })} style={{ ...boxInput, width: 64, marginTop: 5 }} />
+                  ) : (
+                    <div style={{ fontSize: 15, marginTop: 4 }}>{ordinal(dayOf(c.startDate))}</div>
+                  )}
+                </div>
+                <div>
+                  <Eyebrow>Monthly budget</Eyebrow>
+                  {editing ? (
+                    <div style={{ width: 140, marginTop: 5 }}><MoneyInput value={c.amount} step="0.01" onChange={(n) => updateItem(c.id, { amount: n })} /></div>
+                  ) : (
+                    <div style={{ fontSize: 15, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{money2(c.amount)}</div>
+                  )}
+                </div>
+                {editing && <button onClick={() => removeItem(c.id)} title={`Remove ${opts.itemLabel.toLowerCase()}`} style={{ ...xBtn, width: 34, height: 34, border: "1px solid var(--border)", background: "#fff", borderRadius: 8 }}>✕</button>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+                <button onClick={() => toggleCard(c.id ?? "")} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "none", cursor: "pointer", padding: 0, color: "#4a4a4a", fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                  <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+                  {open ? "Hide monthly actuals" : "Monthly actuals"}
+                </button>
+                <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                  {nOv === 0 ? `Using budget ${money0(c.amount)} for all 12 months` : `${nOv} month${nOv === 1 ? "" : "s"} with actuals · rest use budget`}
+                </span>
+              </div>
+              {open && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginTop: 16 }}>
+                  {months.map((ym) => {
+                    const ov = c.overrides?.[ym];
+                    return (
+                      <label key={ym} style={{ display: "flex", flexDirection: "column", gap: 4 }} title={ov != null ? "Actual" : "Budget"}>
+                        <span style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-dim)" }}>{fmtMonth(ym)}</span>
+                        <div className="money-input">
+                          <span className="prefix">$</span>
+                          <input type="number" step="0.01" value={ov ?? ""} placeholder={String(Math.round(c.amount))} onChange={(e) => setOverride(c, ym, e.target.value)} style={{ color: ov != null ? "var(--text)" : "var(--text-faint)" }} />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Hero */}
@@ -236,6 +324,7 @@ export function OperatingExpenses() {
         <div style={{ flex: 1 }} />
         {chip("Recurring", money0(recurringMo) + "/mo")}
         {chip("Cards", money0(cardsBudget) + "/mo")}
+        {chip("Freelance", money0(freelanceBudget) + "/mo")}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -250,78 +339,24 @@ export function OperatingExpenses() {
       </div>
 
       {/* Company cards */}
-      <div style={CARD}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Eyebrow color="var(--text)">Company cards</Eyebrow>
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Budget flows to the forecast; enter actuals as months close</span>
-          </div>
-          <AddButton label="Add card" onClick={() => { setEditing(true); addAmex(); }} />
-        </div>
-        {amex.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No cards yet.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {amex.map((c) => {
-            const open = openCards.has(c.id ?? "");
-            const nOv = Object.keys(c.overrides ?? {}).length;
-            return (
-              <div key={c.id} style={{ border: "1px solid var(--border)", borderRadius: 12, background: "var(--bg)", padding: "16px 18px" }}>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 240px", minWidth: 180 }}>
-                    <Eyebrow>Card</Eyebrow>
-                    {editing ? (
-                      <input value={c.memo ?? ""} placeholder="Card name" onChange={(e) => updateItem(c.id, { memo: e.target.value })} style={{ ...boxInput, width: "100%", marginTop: 5 }} />
-                    ) : (
-                      <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4 }}>{c.memo || "Card"}</div>
-                    )}
-                  </div>
-                  <div>
-                    <Eyebrow>Due day</Eyebrow>
-                    {editing ? (
-                      <input type="number" min={1} max={31} value={dayOf(c.startDate)} onChange={(e) => updateItem(c.id, { startDate: withDay(c.startDate, Number(e.target.value)) })} style={{ ...boxInput, width: 64, marginTop: 5 }} />
-                    ) : (
-                      <div style={{ fontSize: 15, marginTop: 4 }}>{ordinal(dayOf(c.startDate))}</div>
-                    )}
-                  </div>
-                  <div>
-                    <Eyebrow>Monthly budget</Eyebrow>
-                    {editing ? (
-                      <div style={{ width: 140, marginTop: 5 }}><MoneyInput value={c.amount} step="0.01" onChange={(n) => updateItem(c.id, { amount: n })} /></div>
-                    ) : (
-                      <div style={{ fontSize: 15, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{money2(c.amount)}</div>
-                    )}
-                  </div>
-                  {editing && <button onClick={() => removeItem(c.id)} title="Remove card" style={{ ...xBtn, width: 34, height: 34, border: "1px solid var(--border)", background: "#fff", borderRadius: 8 }}>✕</button>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
-                  <button onClick={() => toggleCard(c.id ?? "")} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "none", cursor: "pointer", padding: 0, color: "#4a4a4a", fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase" }}>
-                    <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
-                    {open ? "Hide monthly actuals" : "Monthly actuals"}
-                  </button>
-                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                    {nOv === 0 ? `Using budget ${money0(c.amount)} for all 12 months` : `${nOv} month${nOv === 1 ? "" : "s"} with actuals · rest use budget`}
-                  </span>
-                </div>
-                {open && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginTop: 16 }}>
-                    {months.map((ym) => {
-                      const ov = c.overrides?.[ym];
-                      return (
-                        <label key={ym} style={{ display: "flex", flexDirection: "column", gap: 4 }} title={ov != null ? "Actual" : "Budget"}>
-                          <span style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-dim)" }}>{fmtMonth(ym)}</span>
-                          <div className="money-input">
-                            <span className="prefix">$</span>
-                            <input type="number" step="0.01" value={ov ?? ""} placeholder={String(Math.round(c.amount))} onChange={(e) => setOverride(c, ym, e.target.value)} style={{ color: ov != null ? "var(--text)" : "var(--text-faint)" }} />
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {cardGroup(amex, {
+        title: "Company cards",
+        subtitle: "Budget flows to the forecast; enter actuals as months close",
+        addLabel: "Add card",
+        onAdd: () => { setEditing(true); addAmex(); },
+        emptyText: "No cards yet.",
+        itemLabel: "Card",
+      })}
+
+      {/* Freelance — its own line (budget vs. actual, like a card) */}
+      {cardGroup(freelance, {
+        title: "Freelance",
+        subtitle: "Freelance / contractor budget — its own line; enter actuals as months close",
+        addLabel: "Add freelance budget",
+        onAdd: () => { setEditing(true); addFreelance(); },
+        emptyText: "No freelance budget yet.",
+        itemLabel: "Freelance",
+      })}
 
       {/* Recurring expenses */}
       <div style={CARD}>

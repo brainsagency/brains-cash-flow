@@ -15,6 +15,7 @@ export const CATEGORY_LABELS: Record<CashCategory, string> = {
   payroll: "Payroll",
   operatingExpense: "Operating Expense",
   amex: "American Express",
+  freelance: "Freelance",
   otherWithdrawals: "Other Withdrawals",
   accountsPayable: "Accounts Payable",
   apEstimate: "AP Estimate",
