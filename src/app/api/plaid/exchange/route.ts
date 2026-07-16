@@ -14,13 +14,21 @@ export async function POST(req: NextRequest) {
   if (!plaidConfigured()) {
     return NextResponse.json({ error: "Plaid is not configured." }, { status: 409 });
   }
-  const body = (await req.json().catch(() => ({}))) as { public_token?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    public_token?: string;
+    institution_name?: string;
+  };
   if (!body.public_token) {
     return NextResponse.json({ error: "Missing public_token." }, { status: 400 });
   }
   try {
     const { accessToken, itemId } = await exchangePublicToken(body.public_token);
-    await savePlaidConnection({ accessToken, itemId, connectedAt: new Date().toISOString() });
+    await savePlaidConnection({
+      accessToken,
+      itemId,
+      institutionName: body.institution_name,
+      connectedAt: new Date().toISOString(),
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });

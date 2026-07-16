@@ -49,6 +49,22 @@ Plaid account's mask (edit it in the bank accounts list just above the panel).
 Any Plaid account that doesn't match a tracked last-four is reported as
 "unmatched" so you can add it.
 
+## Multiple banks
+
+Each linked institution is a separate Plaid Item, stored as its own row in
+`plaid_connection` (keyed by `item_id`). Use **+ Connect another bank** to link
+additional institutions — e.g. Chase for checking/savings plus a HYSA at another
+bank. A sync pulls balances from **every** linked item and merges them into one
+snapshot; accounts still land on tracked accounts by last-four. Each institution
+shows as a 🔗 chip with an ✕ to disconnect (which invalidates the item at Plaid
+and drops its token; balances stay at their last synced value).
+
+No Plaid dashboard changes are needed to add a second bank — same app, keys,
+redirect URI, and product cover it. Each Item may count toward Plaid billing.
+
+If a single item needs re-auth, the sync drops just that one and reports it
+(`needsReconnect`) while keeping the others.
+
 ## OAuth banks (Chase, Wells Fargo, Capital One, …)
 
 Large US banks use OAuth: Plaid sends the user to the bank's own site and back.
@@ -76,6 +92,7 @@ complete inline in `PlaidPanel` — `PLAID_REDIRECT_URI` is harmless for them.
 | `POST /api/plaid/exchange` | public token → stored access token |
 | `GET /api/plaid/status` | connection + last-sync summary (no tokens) |
 | `POST /api/sync/bank` (UI) · `GET` (cron) | pull balances, store snapshot |
+| `POST /api/plaid/disconnect` | remove one linked bank by itemId |
 | `GET /api/bank/data` | last snapshot for the client to apply |
 | Connect + sync UI | `src/components/PlaidPanel.tsx` |
 | OAuth redirect landing | `src/app/plaid-oauth/page.tsx` |

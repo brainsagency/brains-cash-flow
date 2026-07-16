@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { plaidConfigured, plaidEnv } from "@/lib/integrations/plaid/client.js";
-import { getLastBankSync, getPlaidConnection } from "@/lib/integrations/store.js";
+import { getLastBankSync, listPlaidConnections } from "@/lib/integrations/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,13 +9,19 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const configured = plaidConfigured();
   try {
-    const conn = await getPlaidConnection();
+    const conns = await listPlaidConnections();
     const lastSync = await getLastBankSync();
     return NextResponse.json({
       configured,
-      connected: Boolean(conn),
+      connected: conns.length > 0,
       environment: plaidEnv(),
-      connectedAt: conn?.connectedAt ?? null,
+      institutions: conns
+        .map((c) => ({
+          itemId: c.itemId,
+          name: c.institutionName ?? "Bank",
+          connectedAt: c.connectedAt,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
       lastSync: lastSync
         ? { syncedAt: lastSync.syncedAt, accountCount: lastSync.accounts.length }
         : null,
@@ -26,7 +32,7 @@ export async function GET() {
       configured,
       connected: false,
       environment: plaidEnv(),
-      connectedAt: null,
+      institutions: [],
       lastSync: null,
       storageError: (e as Error).message,
     });

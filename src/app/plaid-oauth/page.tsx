@@ -32,12 +32,15 @@ export default function PlaidOAuthPage() {
   const { open, ready } = usePlaidLink({
     token,
     receivedRedirectUri: typeof window !== "undefined" ? window.location.href : undefined,
-    onSuccess: async (publicToken) => {
+    onSuccess: async (publicToken, metadata) => {
       try {
         const ex = await fetch("/api/plaid/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token: publicToken }),
+          body: JSON.stringify({
+            public_token: publicToken,
+            institution_name: metadata?.institution?.name,
+          }),
         });
         if (!ex.ok) {
           setMessage("Couldn't finish connecting. Return to the app and try again.");

@@ -9,11 +9,16 @@ import { fetchAndApplyBankBalances, type ApplySummary } from "@/lib/integrations
 /** localStorage key used to resume Link after an OAuth (Chase, etc.) redirect. */
 export const PLAID_LINK_TOKEN_KEY = "plaid_link_token";
 
+interface Institution {
+  itemId: string;
+  name: string;
+  connectedAt: string;
+}
 interface Status {
   configured: boolean;
   connected: boolean;
   environment: string;
-  connectedAt: string | null;
+  institutions: Institution[];
   lastSync: { syncedAt: string; accountCount: number } | null;
 }
 
@@ -80,14 +85,17 @@ export function PlaidPanel() {
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
-    onSuccess: async (publicToken) => {
+    onSuccess: async (publicToken, metadata) => {
       setBusy(true);
       setError(null);
       try {
         const res = await fetch("/api/plaid/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token: publicToken }),
+          body: JSON.stringify({
+            public_token: publicToken,
+            institution_name: metadata?.institution?.name,
+          }),
         });
         if (!res.ok) {
           const body = (await res.json()) as { error?: string };
@@ -120,6 +128,24 @@ export function PlaidPanel() {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
 
+  const disconnect = async (itemId: string, name: string) => {
+    if (!window.confirm(`Disconnect ${name}? Its accounts stop auto-updating (balances stay as last synced).`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await fetch("/api/plaid/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+      await loadStatus();
+    } catch {
+      setError("Couldn't disconnect that bank.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const connect = async () => {
     setError(null);
     try {
@@ -150,8 +176,8 @@ export function PlaidPanel() {
         <div className="spacer" />
         {status?.connected ? (
           <div className="row" style={{ gap: 6 }}>
-            <button className="btn sm ghost" onClick={connect} disabled={busy} title="Relink or connect a different bank">
-              Reconnect
+            <button className="btn sm ghost" onClick={connect} disabled={busy} title="Link an additional bank (e.g. a HYSA at another institution)">
+              + Connect another bank
             </button>
             <button className="btn sm primary" onClick={sync} disabled={busy}>
               {busy ? "Syncing…" : "Sync balances"}
@@ -173,13 +199,31 @@ export function PlaidPanel() {
         </div>
       ) : !status.connected ? (
         <div className="muted">
-          Not connected. Click <b>Connect bank</b> to link your accounts — balances then fill in by last-four.
+          Not connected. Click <b>Connect bank</b> to link your accounts — balances then fill in by last-four. Link
+          each institution separately (e.g. a HYSA at another bank via <b>+ Connect another bank</b>).
         </div>
       ) : (
-        <div className="muted">
-          Connected{status.lastSync ? ` · last synced ${new Date(status.lastSync.syncedAt).toLocaleString()}` : ""}.
-          Set each account&apos;s last-four above so balances match on sync.
-        </div>
+        <>
+          <div className="muted" style={{ marginBottom: 6 }}>
+            {status.lastSync ? `Last synced ${new Date(status.lastSync.syncedAt).toLocaleString()}.` : "Connected."}{" "}
+            Set each account&apos;s last-four above so balances match on sync.
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            {status.institutions.map((inst) => (
+              <span key={inst.itemId} className="chip plaid" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                🔗 {inst.name}
+                <button
+                  onClick={() => disconnect(inst.itemId, inst.name)}
+                  disabled={busy}
+                  title={`Disconnect ${inst.name}`}
+                  style={{ border: "none", background: "none", cursor: "pointer", padding: 0, color: "inherit", opacity: 0.7 }}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
       {summary && (

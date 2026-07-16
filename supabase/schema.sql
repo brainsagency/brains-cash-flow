@@ -36,15 +36,21 @@ create table if not exists public.bill_last_sync (
   reconciliation jsonb
 );
 
--- Plaid connection (single row): the durable access token for the linked
--- bank item. Server-only, like the QBO tokens.
+-- Plaid connections: one row per linked bank Item (so multiple institutions
+-- can be connected — e.g. Chase + a HYSA elsewhere). Keyed by item_id.
+-- Server-only, like the QBO tokens.
 create table if not exists public.plaid_connection (
   id text primary key default 'default',
   access_token text not null,
   item_id text not null,
+  institution_name text,
   connected_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Migration for an earlier single-row install: add the column and re-key the
+-- existing 'default' row by its item_id so it joins the multi-item model.
+alter table public.plaid_connection add column if not exists institution_name text;
+update public.plaid_connection set id = item_id where id = 'default';
 
 -- Last successful bank-balance sync (single row). `accounts` is the normalized
 -- balance snapshot; the client applies it to tracked accounts by last-four.

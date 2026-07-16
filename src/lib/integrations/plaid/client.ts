@@ -126,6 +126,16 @@ export async function getBalances(accessToken: string): Promise<AccountBase[]> {
   }
 }
 
+/** Invalidate a linked item at Plaid (best-effort hygiene on disconnect). */
+export async function removeItem(accessToken: string): Promise<void> {
+  const client = plaidClient();
+  try {
+    await client.itemRemove({ access_token: accessToken });
+  } catch (e) {
+    throw asPlaidError(e);
+  }
+}
+
 /**
  * Normalize a Plaid SDK/Axios error. Surfaces Plaid's `error_message` when
  * present, and maps a login-required item to PlaidAuthError so the caller can

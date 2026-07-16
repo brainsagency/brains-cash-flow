@@ -29,6 +29,8 @@ export interface QboConnection {
 export interface PlaidConnection {
   accessToken: string;
   itemId: string;
+  /** Institution display name from Link (e.g. "Chase"), if captured. */
+  institutionName?: string;
   connectedAt: string;
 }
 
@@ -97,11 +99,11 @@ export function getLastBillSync(): Promise<BillSyncResult | null> {
 export function savePlaidConnection(c: PlaidConnection): Promise<void> {
   return isSupabaseConfigured() ? sbSavePlaidConnection(c) : fileSavePlaidConnection(c);
 }
-export function getPlaidConnection(): Promise<PlaidConnection | null> {
-  return isSupabaseConfigured() ? sbGetPlaidConnection() : fileGetPlaidConnection();
+export function listPlaidConnections(): Promise<PlaidConnection[]> {
+  return isSupabaseConfigured() ? sbListPlaidConnections() : fileListPlaidConnections();
 }
-export function clearPlaidConnection(): Promise<void> {
-  return isSupabaseConfigured() ? sbClearPlaidConnection() : fileClearPlaidConnection();
+export function clearPlaidConnection(itemId: string): Promise<void> {
+  return isSupabaseConfigured() ? sbClearPlaidConnection(itemId) : fileClearPlaidConnection(itemId);
 }
 export function saveBankSync(r: BankSyncResult): Promise<void> {
   return isSupabaseConfigured() ? sbSaveBankSync(r) : fileSaveBankSync(r);
@@ -224,33 +226,31 @@ async function sbGetLastBillSync(): Promise<BillSyncResult | null> {
 }
 
 async function sbSavePlaidConnection(c: PlaidConnection): Promise<void> {
+  // One row per Plaid Item (keyed by item_id), so multiple banks can be linked.
   const { error } = await supabaseAdmin().from("plaid_connection").upsert({
-    id: "default",
+    id: c.itemId,
     access_token: c.accessToken,
     item_id: c.itemId,
+    institution_name: c.institutionName ?? null,
     connected_at: c.connectedAt,
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(`Supabase savePlaidConnection: ${error.message}`);
 }
 
-async function sbGetPlaidConnection(): Promise<PlaidConnection | null> {
-  const { data, error } = await supabaseAdmin()
-    .from("plaid_connection")
-    .select("*")
-    .eq("id", "default")
-    .maybeSingle();
-  if (error) throw new Error(`Supabase getPlaidConnection: ${error.message}`);
-  if (!data) return null;
-  return {
-    accessToken: data.access_token as string,
-    itemId: data.item_id as string,
-    connectedAt: data.connected_at as string,
-  };
+async function sbListPlaidConnections(): Promise<PlaidConnection[]> {
+  const { data, error } = await supabaseAdmin().from("plaid_connection").select("*");
+  if (error) throw new Error(`Supabase listPlaidConnections: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    accessToken: row.access_token as string,
+    itemId: row.item_id as string,
+    institutionName: (row.institution_name as string | null) ?? undefined,
+    connectedAt: row.connected_at as string,
+  }));
 }
 
-async function sbClearPlaidConnection(): Promise<void> {
-  const { error } = await supabaseAdmin().from("plaid_connection").delete().eq("id", "default");
+async function sbClearPlaidConnection(itemId: string): Promise<void> {
+  const { error } = await supabaseAdmin().from("plaid_connection").delete().eq("item_id", itemId);
   if (error) throw new Error(`Supabase clearPlaidConnection: ${error.message}`);
 }
 
@@ -285,7 +285,8 @@ interface FileShape {
   connection?: QboConnection;
   lastSync?: QboSyncResult;
   billLastSync?: BillSyncResult;
-  plaidConnection?: PlaidConnection;
+  plaidConnection?: PlaidConnection; // legacy single-item; migrated on read
+  plaidConnections?: PlaidConnection[];
   bankLastSync?: BankSyncResult;
   log: SyncLogEntry[];
 }
@@ -331,16 +332,28 @@ async function fileSaveBillSync(billLastSync: BillSyncResult): Promise<void> {
 async function fileGetLastBillSync(): Promise<BillSyncResult | null> {
   return (await fileRead()).billLastSync ?? null;
 }
-async function fileSavePlaidConnection(plaidConnection: PlaidConnection): Promise<void> {
-  await fileWrite({ ...(await fileRead()), plaidConnection });
+/** Read connections, migrating a legacy single `plaidConnection` into the list. */
+function fileConnections(s: FileShape): PlaidConnection[] {
+  const list = s.plaidConnections ?? [];
+  if (s.plaidConnection && !list.some((c) => c.itemId === s.plaidConnection!.itemId)) {
+    return [...list, s.plaidConnection];
+  }
+  return list;
 }
-async function fileGetPlaidConnection(): Promise<PlaidConnection | null> {
-  return (await fileRead()).plaidConnection ?? null;
-}
-async function fileClearPlaidConnection(): Promise<void> {
+async function fileSavePlaidConnection(conn: PlaidConnection): Promise<void> {
   const s = await fileRead();
+  const others = fileConnections(s).filter((c) => c.itemId !== conn.itemId);
+  delete s.plaidConnection; // fold legacy field into the list
+  await fileWrite({ ...s, plaidConnections: [...others, conn] });
+}
+async function fileListPlaidConnections(): Promise<PlaidConnection[]> {
+  return fileConnections(await fileRead());
+}
+async function fileClearPlaidConnection(itemId: string): Promise<void> {
+  const s = await fileRead();
+  const remaining = fileConnections(s).filter((c) => c.itemId !== itemId);
   delete s.plaidConnection;
-  await fileWrite(s);
+  await fileWrite({ ...s, plaidConnections: remaining });
 }
 async function fileSaveBankSync(bankLastSync: BankSyncResult): Promise<void> {
   await fileWrite({ ...(await fileRead()), bankLastSync });
