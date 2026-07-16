@@ -35,6 +35,7 @@ import {
   type StaffMember,
 } from "@engine/index.js";
 import { todayISO } from "@/lib/format.js";
+import { autoApplyBankBalances } from "@/lib/integrations/plaid/apply.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
@@ -208,6 +209,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const baseUpdatedAtRef = useRef<string | null>(null); // last server version we've seen
   const stateRef = useRef<AppState>(state); // latest state for flush-on-hide
   const dirtyRef = useRef(false); // an unsaved cloud change is pending
+  const bankAutoAppliedRef = useRef(false); // one-shot Plaid balance apply per load
   const suppressSaveRef = useRef(false); // skip the cloud save for a programmatic adopt
   stateRef.current = state;
 
@@ -430,6 +432,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, input: updater(s.input) })),
     [],
   );
+
+  // Once loaded, pull the latest Plaid snapshot into linked bank balances —
+  // guarded so it only refreshes accounts the snapshot has newer data for and
+  // only writes when something actually changed (so it won't clobber a newer
+  // manual edit or churn the shared workspace). Runs once per load.
+  useEffect(() => {
+    if (!ready || bankAutoAppliedRef.current) return;
+    bankAutoAppliedRef.current = true;
+    void autoApplyBankBalances(stateRef.current.input.bankAccounts, setInput);
+  }, [ready, setInput]);
   const setScenarios = useCallback(
     (updater: (prev: Scenario[]) => Scenario[]) => setState((s) => ({ ...s, scenarios: updater(s.scenarios) })),
     [],

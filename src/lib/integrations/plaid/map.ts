@@ -62,6 +62,16 @@ export interface ApplyResult {
   unmatched: PlaidAccountBalance[];
 }
 
+export interface ApplyOptions {
+  /**
+   * Only update an account when the snapshot's `asOf` is strictly newer than the
+   * account's current `balanceAsOf` (dates compared). Used for the on-load
+   * auto-apply so it never clobbers a more-recent manual edit; leave off for a
+   * user-triggered sync, which should always apply.
+   */
+  onlyIfNewer?: boolean;
+}
+
 /**
  * Apply synced balances to the tracked accounts, matching by mask. Matched
  * accounts get the fresh balance and `balanceAsOf = asOf`; everything else is
@@ -72,6 +82,7 @@ export function applyBalances(
   accounts: BankAccount[],
   synced: PlaidAccountBalance[],
   asOf: ISODate,
+  opts: ApplyOptions = {},
 ): ApplyResult {
   const byMask = new Map<string, PlaidAccountBalance>();
   for (const s of synced) {
@@ -84,6 +95,9 @@ export function applyBalances(
     const s = acc.mask ? byMask.get(acc.mask) : undefined;
     const bal = s ? bookableBalance(s) : null;
     if (!s || bal == null) return acc;
+    // Skip when the snapshot isn't newer than what we already have (no date =
+    // always apply).
+    if (opts.onlyIfNewer && acc.balanceAsOf && !(asOf > acc.balanceAsOf)) return acc;
     usedMasks.add(acc.mask!);
     const updated: BankAccount = { ...acc, beginningBalance: bal, balanceAsOf: asOf };
     matched.push({ account: updated, synced: s, newBalance: bal });
