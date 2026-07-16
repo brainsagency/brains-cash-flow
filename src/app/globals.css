@@ -860,6 +860,21 @@ details.editor[open] > summary::before {
   border-color: var(--border-strong);
 }
 
+/* Brief highlight when a value updates (e.g. a balance synced from Plaid). */
+@keyframes balanceFlash {
+  0% { background: rgba(46, 115, 84, 0.28); }
+  100% { background: transparent; }
+}
+.balance-flash {
+  animation: balanceFlash 1.3s ease-out;
+  border-radius: 8px;
+}
+.chip.plaid {
+  color: var(--green);
+  border-color: rgba(46, 115, 84, 0.4);
+  background: rgba(46, 115, 84, 0.08);
+}
+
 .aging {
   display: flex;
   gap: 16px;
