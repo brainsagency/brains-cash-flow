@@ -3,7 +3,7 @@
  *
  * Balances-only for now: we create a Link token, exchange the public token from
  * Link for a long-lived access token, and read live account balances via
- * `/accounts/balance/get`. No transactions are pulled.
+ * `/accounts/get` (balances). No transactions are pulled.
  *
  * Config comes from env (never commit secrets):
  *  - PLAID_CLIENT_ID, PLAID_SECRET
@@ -52,7 +52,7 @@ function plaidClient(): PlaidApi {
 /**
  * Products requested at Link time. Plaid won't accept `balance` on its own — it
  * auto-initializes alongside any other product, and we only ever call
- * `/accounts/balance/get`. So we request `transactions` (the most commonly
+ * balances. So we request `transactions` (the most commonly
  * enabled product) purely to unlock balances; no transactions are pulled.
  * Override with `PLAID_PRODUCTS` (comma-separated) to match whatever product is
  * enabled on your Plaid account, e.g. `PLAID_PRODUCTS=auth`.
@@ -106,11 +106,20 @@ export async function exchangePublicToken(
   }
 }
 
-/** Live balances for every account on the linked item. */
+/**
+ * Balances for every account on the linked item.
+ *
+ * Uses `/accounts/get` (not `/accounts/balance/get`): it returns the same
+ * accounts with their `balances`, works with any product (e.g. Transactions),
+ * and does NOT require the separate Balance product to be authorized. It
+ * returns Plaid's most-recent cached balances — fine for a daily-synced
+ * forecast. Switch to `accountsBalanceGet` only if the Balance product is
+ * enabled and you need a forced real-time pull.
+ */
 export async function getBalances(accessToken: string): Promise<AccountBase[]> {
   const client = plaidClient();
   try {
-    const resp = await client.accountsBalanceGet({ access_token: accessToken });
+    const resp = await client.accountsGet({ access_token: accessToken });
     return resp.data.accounts;
   } catch (e) {
     throw asPlaidError(e);

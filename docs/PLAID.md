@@ -5,7 +5,8 @@ balances and writes them into the tracked bank accounts, matched by **last-four
 (mask)**, stamped as-of now. That's what clears the "update starting cash"
 reconcile banner — no manual entry.
 
-No transactions are pulled (yet). This only reads `/accounts/balance/get`.
+No transactions are pulled (yet). This only reads `/accounts/get` (balances),
+which works with the enabled product and needs no separate Balance product.
 
 ## Setup
 
@@ -15,7 +16,7 @@ No transactions are pulled (yet). This only reads `/accounts/balance/get`.
    environment — use **production** for live banks.
 2. Product: Plaid rejects `balance` as a standalone Link product — it rides
    along with any other product. We request **`transactions`** purely to unlock
-   balances (we only call `/accounts/balance/get`; no transactions are pulled).
+   balances (we only read balances via `/accounts/get`; no transactions are pulled).
    Set `PLAID_PRODUCTS` to whatever product your account has enabled if it's not
    Transactions (e.g. `auth`). Request/enable products at
    https://dashboard.plaid.com/overview/request-products.
