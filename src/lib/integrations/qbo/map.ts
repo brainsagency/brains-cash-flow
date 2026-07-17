@@ -18,6 +18,11 @@ interface QboRef {
   value: string;
 }
 
+export interface QboInvoiceLine {
+  Description?: string; // line description ("Salaries Expense for …")
+  SalesItemLineDetail?: { ItemRef?: QboRef }; // ItemRef.name is the "ACTIVITY" ("G&A Salaries - MC")
+}
+
 export interface QboInvoice {
   Id: string;
   Balance?: number; // open/unpaid amount
@@ -27,25 +32,31 @@ export interface QboInvoice {
   CustomerRef?: QboRef;
   PrivateNote?: string; // internal "statement memo"
   CustomerMemo?: { value?: string }; // customer-facing message on the invoice
+  Line?: QboInvoiceLine[]; // line items (activity/description live here)
 }
 
 /**
- * Memo phrase that marks an invoice as a payroll-reimbursement bill (e.g. Mass
- * Culture's share of split salaries, memo'd "G&A salaries"). When an invoice
- * carries this in its memo, the projected recurring reimbursement receipt yields
- * to the real invoice for that period — see `gateReimbursementReceipts`.
- * (The receipt items themselves are matched by their `mc-reimb-*` ids.)
+ * Phrase that marks an invoice as a payroll-reimbursement bill (Mass Culture's
+ * share of split salaries). On the real invoices it appears in the **line-item
+ * activity** ("G&A Salaries - MC", "G&A Salaries - 401(K) - MC", …), not the
+ * invoice memo — so matching scans line descriptions/item names too. When an
+ * invoice matches, the projected recurring receipt yields to it for that period
+ * (see `gateReimbursementReceipts`). Receipt items match by their `mc-reimb-*` ids.
  */
 export const REIMBURSEMENT_MEMO = "G&A salaries";
 
-/** All memo-ish text on an invoice, lowercased, for phrase matching. */
-export function invoiceMemoText(inv: QboInvoice): string {
-  return [inv.PrivateNote, inv.CustomerMemo?.value].filter(Boolean).join(" ").toLowerCase();
+/** All matchable text on an invoice (memo + line activity/description), lowercased. */
+export function invoiceMatchText(inv: QboInvoice): string {
+  const parts: (string | undefined)[] = [inv.PrivateNote, inv.CustomerMemo?.value];
+  for (const line of inv.Line ?? []) {
+    parts.push(line.Description, line.SalesItemLineDetail?.ItemRef?.name);
+  }
+  return parts.filter(Boolean).join(" ").toLowerCase();
 }
 
-/** True when the invoice's memo marks it as a payroll reimbursement. */
+/** True when the invoice's memo or line items mark it as a payroll reimbursement. */
 export function isReimbursementInvoice(inv: QboInvoice, phrase = REIMBURSEMENT_MEMO): boolean {
-  return invoiceMemoText(inv).includes(phrase.toLowerCase());
+  return invoiceMatchText(inv).includes(phrase.toLowerCase());
 }
 
 /**

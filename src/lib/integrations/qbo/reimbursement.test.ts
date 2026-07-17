@@ -56,20 +56,34 @@ describe("gateReimbursementReceipts", () => {
 });
 
 describe("reimbursement invoice detection", () => {
-  const inv = (Id: string, TxnDate: string, note?: string): QboInvoice => ({ Id, Balance: 15_673, TxnDate, PrivateNote: note });
+  // Real shape (Invoice 14074): the phrase is in the line-item activity, not the memo.
+  const lineInv = (Id: string, TxnDate: string, activity: string): QboInvoice => ({
+    Id,
+    Balance: 17_682.44,
+    TxnDate,
+    Line: [{ Description: `Salaries Expense for ${TxnDate}`, SalesItemLineDetail: { ItemRef: { value: "1", name: activity } } }],
+  });
 
-  it("matches the memo phrase case-insensitively across memo fields", () => {
-    expect(isReimbursementInvoice(inv("1", "2026-07-01", "G&A salaries — Ben"))).toBe(true);
-    expect(isReimbursementInvoice({ Id: "2", Balance: 1, CustomerMemo: { value: "G&A salaries" } })).toBe(true);
-    expect(isReimbursementInvoice(inv("3", "2026-07-01", "Project X consulting"))).toBe(false);
+  it("matches the phrase in line-item activity (the real invoice shape)", () => {
+    expect(isReimbursementInvoice(lineInv("1", "2026-06-30", "G&A Salaries - MC"))).toBe(true);
+    expect(isReimbursementInvoice(lineInv("2", "2026-06-30", "G&A Salaries - 401(K) - MC"))).toBe(true);
+  });
+
+  it("still matches the phrase in the invoice memo fields", () => {
+    expect(isReimbursementInvoice({ Id: "3", Balance: 1, PrivateNote: "G&A salaries — Ben" })).toBe(true);
+    expect(isReimbursementInvoice({ Id: "4", Balance: 1, CustomerMemo: { value: "G&A salaries" } })).toBe(true);
+  });
+
+  it("does not match a real project invoice", () => {
+    expect(isReimbursementInvoice(lineInv("5", "2026-08-01", "Website redesign — phase 2"))).toBe(false);
   });
 
   it("latest date ignores non-reimbursement invoices", () => {
     const invs = [
-      inv("1", "2026-07-01", "G&A salaries"),
-      inv("2", "2026-07-15", "G&A salaries"),
-      inv("3", "2026-08-01", "project work"), // real revenue, not a reimbursement
+      lineInv("1", "2026-06-15", "G&A Salaries - MC"),
+      lineInv("2", "2026-06-30", "G&A Salaries - MC"),
+      lineInv("3", "2026-08-01", "Project work"), // real revenue, not a reimbursement
     ];
-    expect(latestReimbursementInvoiceDate(invs)).toBe("2026-07-15");
+    expect(latestReimbursementInvoiceDate(invs)).toBe("2026-06-30");
   });
 });
