@@ -25,6 +25,46 @@ export interface QboInvoice {
   TxnDate?: string;
   DocNumber?: string;
   CustomerRef?: QboRef;
+  PrivateNote?: string; // internal "statement memo"
+  CustomerMemo?: { value?: string }; // customer-facing message on the invoice
+}
+
+/**
+ * Memo phrase that marks an invoice as a payroll-reimbursement bill (e.g. Mass
+ * Culture's share of split salaries). When an invoice carries this in its memo,
+ * the projected recurring reimbursement receipt yields to the real invoice for
+ * that period — see `gateReimbursementReceipts`. Also the phrase to put in the
+ * recurring receipt items' memo so the two are linked.
+ */
+export const REIMBURSEMENT_MEMO = "payroll reimbursement";
+
+/** All memo-ish text on an invoice, lowercased, for phrase matching. */
+export function invoiceMemoText(inv: QboInvoice): string {
+  return [inv.PrivateNote, inv.CustomerMemo?.value].filter(Boolean).join(" ").toLowerCase();
+}
+
+/** True when the invoice's memo marks it as a payroll reimbursement. */
+export function isReimbursementInvoice(inv: QboInvoice, phrase = REIMBURSEMENT_MEMO): boolean {
+  return invoiceMemoText(inv).includes(phrase.toLowerCase());
+}
+
+/**
+ * Latest transaction date among reimbursement invoices (open or not), or null.
+ * The QBO sync advances a persisted high-water mark with this so the projected
+ * receipt stays suppressed for a period even after its invoice is paid and
+ * drops out of the open-invoice sync.
+ */
+export function latestReimbursementInvoiceDate(
+  invoices: QboInvoice[],
+  phrase = REIMBURSEMENT_MEMO,
+): ISODate | null {
+  let max: ISODate | null = null;
+  for (const inv of invoices) {
+    if (!isReimbursementInvoice(inv, phrase)) continue;
+    const d = inv.TxnDate ?? inv.DueDate;
+    if (d && (max === null || d > max)) max = d;
+  }
+  return max;
 }
 
 export interface QboBill {

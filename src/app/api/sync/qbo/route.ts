@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireCronAuth } from "@/lib/cron.js";
 import { QboAuthError, qboConfig, queryQbo, refreshTokens } from "@/lib/integrations/qbo/client.js";
-import { mapBills, mapInvoices, type QboBill, type QboInvoice } from "@/lib/integrations/qbo/map.js";
-import { appendLog, clearConnection, getConnection, saveConnection, saveSync } from "@/lib/integrations/store.js";
+import { latestReimbursementInvoiceDate, mapBills, mapInvoices, type QboBill, type QboInvoice } from "@/lib/integrations/qbo/map.js";
+import { appendLog, clearConnection, getConnection, getLastSync, saveConnection, saveSync } from "@/lib/integrations/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,12 +50,22 @@ async function runQboSync() {
       queryQbo(cfg, conn.realmId, accessToken, "SELECT * FROM Bill WHERE Balance > '0' MAXRESULTS 1000"),
     ]);
 
-    const arEvents = mapInvoices((invResp.Invoice ?? []) as QboInvoice[], anchor);
+    const invoices = (invResp.Invoice ?? []) as QboInvoice[];
+    const arEvents = mapInvoices(invoices, anchor);
     const apValidationEvents = mapBills((billResp.Bill ?? []) as QboBill[], anchor);
     const arTotal = arEvents.reduce((s, e) => s + e.amount, 0);
     const apTotal = apValidationEvents.reduce((s, e) => s + e.amount, 0);
 
-    const result = { syncedAt: new Date().toISOString(), anchor, arEvents, apValidationEvents, arTotal, apTotal };
+    // Advance the payroll-reimbursement high-water mark (monotonic): the later of
+    // what we saw this sync and what we'd recorded before (paid invoices drop
+    // from the open-invoice query, so we must carry the previous mark forward).
+    const prev = await getLastSync();
+    const marks = [prev?.mcReimbursedThrough ?? null, latestReimbursementInvoiceDate(invoices)]
+      .filter((d): d is string => Boolean(d))
+      .sort();
+    const mcReimbursedThrough = marks.length ? marks[marks.length - 1]! : null;
+
+    const result = { syncedAt: new Date().toISOString(), anchor, arEvents, apValidationEvents, arTotal, apTotal, mcReimbursedThrough };
     await saveSync(result);
     await appendLog({
       source: "qbo",

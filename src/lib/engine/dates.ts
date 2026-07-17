@@ -105,3 +105,25 @@ export function startOfMonth(date: ISODate): ISODate {
 export function monthsBetween(a: ISODate, b: ISODate): number {
   return daysBetween(a, b) / AVG_DAYS_PER_MONTH;
 }
+
+/**
+ * The first date on `dayOfMonth` that is strictly after `after`. Advances a
+ * monthly recurring item past a cutoff while preserving its day-of-month
+ * (clamped to the month length for short months).
+ */
+export function firstMonthlyOccurrenceAfter(dayOfMonth: number, after: ISODate): ISODate {
+  const d = parseISO(after);
+  const day = Math.min(31, Math.max(1, Math.floor(dayOfMonth) || 1));
+  let year = d.getUTCFullYear();
+  let month = d.getUTCMonth(); // 0-based
+  for (let i = 0; i < 24; i++) {
+    const clamped = Math.min(day, daysInMonth(year, month));
+    const candidate = `${year}-${String(month + 1).padStart(2, "0")}-${String(clamped).padStart(2, "0")}`;
+    if (candidate > after) return candidate;
+    if (++month > 11) {
+      month = 0;
+      year++;
+    }
+  }
+  return after; // unreachable for valid input
+}

@@ -36,6 +36,7 @@ import {
 } from "@engine/index.js";
 import { todayISO } from "@/lib/format.js";
 import { autoApplyBankBalances } from "@/lib/integrations/plaid/apply.js";
+import { gateReimbursementReceipts } from "@/lib/integrations/qbo/reimbursement.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
@@ -203,6 +204,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [qboSyncedAt, setQboSyncedAt] = useState<string | null>(null);
   const [syncedAp, setSyncedAp] = useState<CashEvent[] | null>(null);
   const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
+  const [reimbursedThrough, setReimbursedThrough] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Optimistic-concurrency + reliable-save bookkeeping (all refs so they're
   // current inside async saves and window event handlers without re-rendering).
@@ -275,7 +277,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshQbo = useCallback(async () => {
     try {
       const res = await fetch("/api/qbo/data", { cache: "no-store" });
-      const data = (await res.json()) as { syncedAt: string | null; arEvents: CashEvent[] };
+      const data = (await res.json()) as { syncedAt: string | null; arEvents: CashEvent[]; mcReimbursedThrough?: string | null };
+      setReimbursedThrough(data.mcReimbursedThrough ?? null);
       if (data.arEvents && data.arEvents.length > 0) {
         setSyncedAr(data.arEvents);
         setQboSyncedAt(data.syncedAt);
@@ -573,10 +576,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // a date override moves the cash date (collection for AR, payment for AP),
   // clamped to the anchor so a past date can't fall out of the horizon.
   const mergedInput = useMemo<ForecastInput>(() => {
+    // Suppress the projected MC reimbursement receipt for periods already covered
+    // by a real reimbursement invoice (the invoice, kept as AR, takes over).
+    const base: ForecastInput = reimbursedThrough
+      ? { ...staffBase, recurring: gateReimbursementReceipts(staffBase.recurring ?? [], reimbursedThrough) }
+      : staffBase;
     const hasAr = syncedAr && syncedAr.length > 0;
     const hasAp = syncedAp && syncedAp.length > 0;
-    if (!hasAr && !hasAp) return staffBase;
-    let events = staffBase.events ?? [];
+    if (!hasAr && !hasAp) return base;
+    let events = base.events ?? [];
     if (hasAr) events = events.filter((e) => !QBO_AR_CATEGORIES.has(e.category));
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
 
@@ -602,14 +610,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
 
     return {
-      ...staffBase,
+      ...base,
       events: [
         ...events,
         ...applyAdjustments(hasAr ? syncedAr : [], arLag),
         ...applyAdjustments(hasAp ? syncedAp : [], 0),
       ],
     };
-  }, [staffBase, state.adjustments, syncedAr, syncedAp]);
+  }, [staffBase, state.adjustments, syncedAr, syncedAp, reimbursedThrough]);
 
   return (
     <StoreContext.Provider

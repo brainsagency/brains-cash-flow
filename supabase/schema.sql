@@ -22,8 +22,12 @@ create table if not exists public.qbo_last_sync (
   ar_events jsonb not null default '[]',
   ap_validation_events jsonb not null default '[]',
   ar_total numeric not null default 0,
-  ap_total numeric not null default 0
+  ap_total numeric not null default 0,
+  mc_reimbursed_through date
 );
+-- Migration for existing installs: high-water mark of the latest MC payroll-
+-- reimbursement invoice, so the projected receipt yields to the real invoice.
+alter table public.qbo_last_sync add column if not exists mc_reimbursed_through date;
 
 -- Last successful Bill.com sync (single row). AP source of truth for the
 -- forecast; `reconciliation` holds the check vs QuickBooks Bills.

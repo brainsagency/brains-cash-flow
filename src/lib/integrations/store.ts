@@ -46,6 +46,12 @@ export interface QboSyncResult {
   apValidationEvents: CashEvent[];
   arTotal: number;
   apTotal: number;
+  /**
+   * High-water mark: latest MC payroll-reimbursement invoice date seen. Monotonic
+   * (carried forward each sync) so the projected reimbursement receipt stays
+   * suppressed for a period even after its invoice is paid and drops from sync.
+   */
+  mcReimbursedThrough?: string | null;
 }
 
 export interface BillSyncResult {
@@ -160,6 +166,7 @@ async function sbSaveSync(r: QboSyncResult): Promise<void> {
     ap_validation_events: r.apValidationEvents,
     ar_total: r.arTotal,
     ap_total: r.apTotal,
+    mc_reimbursed_through: r.mcReimbursedThrough ?? null,
   });
   if (error) throw new Error(`Supabase saveSync: ${error.message}`);
 }
@@ -179,6 +186,7 @@ async function sbGetLastSync(): Promise<QboSyncResult | null> {
     apValidationEvents: (data.ap_validation_events ?? []) as CashEvent[],
     arTotal: Number(data.ar_total),
     apTotal: Number(data.ap_total),
+    mcReimbursedThrough: (data.mc_reimbursed_through as string | null) ?? null,
   };
 }
 

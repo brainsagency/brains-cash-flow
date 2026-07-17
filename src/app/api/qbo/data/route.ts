@@ -15,10 +15,11 @@ export async function GET() {
       syncedAt: lastSync?.syncedAt ?? null,
       arEvents: lastSync?.arEvents ?? [],
       apValidationEvents: lastSync?.apValidationEvents ?? [],
+      mcReimbursedThrough: lastSync?.mcReimbursedThrough ?? null,
     });
   } catch {
     // Storage unavailable — return empty so the app stays on manual data.
-    return NextResponse.json({ syncedAt: null, arEvents: [], apValidationEvents: [] });
+    return NextResponse.json({ syncedAt: null, arEvents: [], apValidationEvents: [], mcReimbursedThrough: null });
   }
 }
 
