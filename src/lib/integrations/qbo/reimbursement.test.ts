@@ -3,7 +3,7 @@ import type { RecurringItem } from "@engine/index.js";
 import { gateReimbursementReceipts, isReimbursementReceipt } from "./reimbursement.js";
 import { isReimbursementInvoice, latestReimbursementInvoiceDate, type QboInvoice } from "./map.js";
 
-const receipt = (id: string, startDate: string, memo = "MC payroll reimbursement"): RecurringItem => ({
+const receipt = (id: string, startDate: string, memo = "MC G&A salaries"): RecurringItem => ({
   id,
   category: "notInvoiced",
   amount: 15_673,
@@ -15,7 +15,7 @@ const receipt = (id: string, startDate: string, memo = "MC payroll reimbursement
 describe("isReimbursementReceipt", () => {
   it("matches mc-reimb ids and memo-tagged notInvoiced items; nothing else", () => {
     expect(isReimbursementReceipt(receipt("mc-reimb-1st", "2026-07-11", ""))).toBe(true);
-    expect(isReimbursementReceipt(receipt("x", "2026-07-11", "Payroll Reimbursement"))).toBe(true);
+    expect(isReimbursementReceipt(receipt("x", "2026-07-11", "G&A salaries"))).toBe(true);
     expect(isReimbursementReceipt(receipt("x", "2026-07-11", "office supplies"))).toBe(false);
     expect(
       isReimbursementReceipt({ id: "ar", category: "currentAR", amount: 1, frequency: "monthly", startDate: "2026-07-01" }),
@@ -59,15 +59,15 @@ describe("reimbursement invoice detection", () => {
   const inv = (Id: string, TxnDate: string, note?: string): QboInvoice => ({ Id, Balance: 15_673, TxnDate, PrivateNote: note });
 
   it("matches the memo phrase case-insensitively across memo fields", () => {
-    expect(isReimbursementInvoice(inv("1", "2026-07-01", "Payroll Reimbursement — Ben"))).toBe(true);
-    expect(isReimbursementInvoice({ Id: "2", Balance: 1, CustomerMemo: { value: "payroll reimbursement" } })).toBe(true);
+    expect(isReimbursementInvoice(inv("1", "2026-07-01", "G&A salaries — Ben"))).toBe(true);
+    expect(isReimbursementInvoice({ Id: "2", Balance: 1, CustomerMemo: { value: "G&A salaries" } })).toBe(true);
     expect(isReimbursementInvoice(inv("3", "2026-07-01", "Project X consulting"))).toBe(false);
   });
 
   it("latest date ignores non-reimbursement invoices", () => {
     const invs = [
-      inv("1", "2026-07-01", "payroll reimbursement"),
-      inv("2", "2026-07-15", "payroll reimbursement"),
+      inv("1", "2026-07-01", "G&A salaries"),
+      inv("2", "2026-07-15", "G&A salaries"),
       inv("3", "2026-08-01", "project work"), // real revenue, not a reimbursement
     ];
     expect(latestReimbursementInvoiceDate(invs)).toBe("2026-07-15");

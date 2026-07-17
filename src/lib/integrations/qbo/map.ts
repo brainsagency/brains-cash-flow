@@ -31,12 +31,12 @@ export interface QboInvoice {
 
 /**
  * Memo phrase that marks an invoice as a payroll-reimbursement bill (e.g. Mass
- * Culture's share of split salaries). When an invoice carries this in its memo,
- * the projected recurring reimbursement receipt yields to the real invoice for
- * that period — see `gateReimbursementReceipts`. Also the phrase to put in the
- * recurring receipt items' memo so the two are linked.
+ * Culture's share of split salaries, memo'd "G&A salaries"). When an invoice
+ * carries this in its memo, the projected recurring reimbursement receipt yields
+ * to the real invoice for that period — see `gateReimbursementReceipts`.
+ * (The receipt items themselves are matched by their `mc-reimb-*` ids.)
  */
-export const REIMBURSEMENT_MEMO = "payroll reimbursement";
+export const REIMBURSEMENT_MEMO = "G&A salaries";
 
 /** All memo-ish text on an invoice, lowercased, for phrase matching. */
 export function invoiceMemoText(inv: QboInvoice): string {
