@@ -22,6 +22,11 @@ function isActiveThisMonth(m: StaffMember, anchor: string): boolean {
   if (m.dot && m.dot < monthStart) return false;
   return true;
 }
+/** Former = term date already passed (before this month). A future-dated
+ *  term is still an active, still-paid employee, so it does NOT count here. */
+function isFormer(m: StaffMember, anchor: string): boolean {
+  return !!(m.dot && isValidISODate(m.dot) && m.dot < `${anchor.slice(0, 7)}-01`);
+}
 function effectiveSalary(m: StaffMember, anchor: string): number {
   if (m.salaryChangeDate && m.newSalary !== undefined && m.salaryChangeDate <= anchor) return m.newSalary;
   return m.annualSalary;
@@ -31,6 +36,7 @@ const money0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const CARD: CSSProperties = { background: "var(--bg-elev)", border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 };
 const eyebrow: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-dim)" };
 const editLink: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer", padding: 0 };
+const formerToggle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", background: "transparent", border: "none", borderTop: "1px solid rgba(19,19,19,0.05)", cursor: "pointer", padding: "13px 4px 8px", width: "100%", textAlign: "left" };
 
 export function StaffRoster() {
   const { input, setInput } = useStore();
@@ -38,6 +44,7 @@ export function StaffRoster() {
   const load = input.staffLoadFactor ?? 1;
   const anchor = input.anchorDate;
   const [editing, setEditing] = useState(false);
+  const [showFormer, setShowFormer] = useState(false);
 
   const write = (next: StaffMember[]) => setInput((prev: ForecastInput) => ({ ...prev, staff: next }));
   const paidThrough = input.payrollPaidThrough;
@@ -50,6 +57,38 @@ export function StaffRoster() {
   const active = staff.filter((m) => isActiveThisMonth(m, anchor));
   const monthlyPayroll = (active.reduce((s, m) => s + effectiveSalary(m, anchor), 0) * load) / 12;
   const loadPct = Math.round((load - 1) * 100);
+  const formerCount = staff.filter((m) => isFormer(m, anchor)).length;
+
+  const readRow = (m: StaffMember) => (
+    <div key={m.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, padding: "13px 4px", borderTop: "1px solid rgba(19,19,19,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", minWidth: 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{m.name || "Unnamed"}</span>
+        {isValidISODate(m.doh) && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>since {fmtShortDate(m.doh)}</span>}
+        {m.dot && isValidISODate(m.dot) && <span style={{ fontSize: 13, color: "var(--red)" }}>· ends {fmtShortDate(m.dot)}</span>}
+        {m.severance ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· sev {fmtMoney(m.severance)}{m.severancePayout === "payroll" ? " (payroll)" : ""}</span> : null}
+        {m.vacationPayout ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· vac {fmtMoney(m.vacationPayout)}</span> : null}
+      </div>
+      <div style={{ fontSize: 14.5, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {fmtMoney(m.annualSalary, { cents: true })}<span style={{ color: "var(--text-faint)", fontWeight: 400 }}> /yr</span>
+      </div>
+    </div>
+  );
+
+  const editRow = (m: StaffMember, i: number) => (
+    <div key={m.id} className="staff-edit-row" style={{ alignItems: "center", marginBottom: 8 }}>
+      <input value={m.name} placeholder="Full name" onChange={(e) => update(i, { name: e.target.value })} />
+      <MoneyInput value={m.annualSalary} step="0.01" onChange={(n) => update(i, { annualSalary: n })} />
+      <input type="date" value={m.doh} onChange={(e) => update(i, { doh: e.target.value })} />
+      <input type="date" value={m.dot ?? ""} onChange={(e) => update(i, { dot: e.target.value || undefined })} />
+      <MoneyInput value={m.severance ?? 0} step="0.01" onChange={(n) => update(i, { severance: n || undefined })} />
+      <select value={m.severancePayout ?? "lump"} onChange={(e) => update(i, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}>
+        <option value="lump">Lump sum</option>
+        <option value="payroll">On payroll</option>
+      </select>
+      <MoneyInput value={m.vacationPayout ?? 0} step="0.01" onChange={(n) => update(i, { vacationPayout: n || undefined })} />
+      <button className="btn sm ghost" onClick={() => remove(i)} title="Remove">✕</button>
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -118,23 +157,15 @@ export function StaffRoster() {
         {/* Read view */}
         {!editing && (
           <div>
-            {staff.map((m) => {
-              const gone = m.dot && isValidISODate(m.dot) && m.dot < `${anchor.slice(0, 7)}-01`;
-              return (
-                <div key={m.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, padding: "13px 4px", borderTop: "1px solid rgba(19,19,19,0.05)", opacity: gone ? 0.5 : 1 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", minWidth: 0 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{m.name || "Unnamed"}</span>
-                    {isValidISODate(m.doh) && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>since {fmtShortDate(m.doh)}</span>}
-                    {m.dot && isValidISODate(m.dot) && <span style={{ fontSize: 13, color: "var(--red)" }}>· ends {fmtShortDate(m.dot)}</span>}
-                    {m.severance ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· sev {fmtMoney(m.severance)}{m.severancePayout === "payroll" ? " (payroll)" : ""}</span> : null}
-                    {m.vacationPayout ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· vac {fmtMoney(m.vacationPayout)}</span> : null}
-                  </div>
-                  <div style={{ fontSize: 14.5, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                    {fmtMoney(m.annualSalary, { cents: true })}<span style={{ color: "var(--text-faint)", fontWeight: 400 }}> /yr</span>
-                  </div>
-                </div>
-              );
-            })}
+            {staff.filter((m) => !isFormer(m, anchor)).map(readRow)}
+            {formerCount > 0 && (
+              <div>
+                <button style={formerToggle} onClick={() => setShowFormer((v) => !v)}>
+                  <span>{showFormer ? "▾" : "▸"}</span> Former · {formerCount}
+                </button>
+                {showFormer && staff.filter((m) => isFormer(m, anchor)).map(readRow)}
+              </div>
+            )}
           </div>
         )}
 
@@ -153,24 +184,15 @@ export function StaffRoster() {
                 <span />
               </div>
             )}
-            {staff.map((m, i) => {
-              const gone = m.dot && isValidISODate(m.dot) && m.dot < `${anchor.slice(0, 7)}-01`;
-              return (
-                <div key={m.id} className="staff-edit-row" style={{ alignItems: "center", marginBottom: 8, opacity: gone ? 0.55 : 1 }}>
-                  <input value={m.name} placeholder="Full name" onChange={(e) => update(i, { name: e.target.value })} />
-                  <MoneyInput value={m.annualSalary} step="0.01" onChange={(n) => update(i, { annualSalary: n })} />
-                  <input type="date" value={m.doh} onChange={(e) => update(i, { doh: e.target.value })} />
-                  <input type="date" value={m.dot ?? ""} onChange={(e) => update(i, { dot: e.target.value || undefined })} />
-                  <MoneyInput value={m.severance ?? 0} step="0.01" onChange={(n) => update(i, { severance: n || undefined })} />
-                  <select value={m.severancePayout ?? "lump"} onChange={(e) => update(i, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}>
-                    <option value="lump">Lump sum</option>
-                    <option value="payroll">On payroll</option>
-                  </select>
-                  <MoneyInput value={m.vacationPayout ?? 0} step="0.01" onChange={(n) => update(i, { vacationPayout: n || undefined })} />
-                  <button className="btn sm ghost" onClick={() => remove(i)} title="Remove">✕</button>
-                </div>
-              );
-            })}
+            {staff.map((m, i) => [m, i] as const).filter(([m]) => !isFormer(m, anchor)).map(([m, i]) => editRow(m, i))}
+            {formerCount > 0 && (
+              <div>
+                <button style={formerToggle} onClick={() => setShowFormer((v) => !v)}>
+                  <span>{showFormer ? "▾" : "▸"}</span> Former · {formerCount}
+                </button>
+                {showFormer && staff.map((m, i) => [m, i] as const).filter(([m]) => isFormer(m, anchor)).map(([m, i]) => editRow(m, i))}
+              </div>
+            )}
           </div>
         )}
 
