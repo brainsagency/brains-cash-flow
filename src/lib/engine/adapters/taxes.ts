@@ -71,6 +71,23 @@ export interface TaxInstallment {
   missingMonths: string[];
 }
 
+/**
+ * Money is carried to a tenth of a cent. The profit figures arrive from the
+ * sheet unrounded (Jan is -21563.570000000065), so rounding the tax to whole
+ * dollars threw away real precision and stopped the figures tying back to the
+ * source. Three decimal places also clips the float noise that would otherwise
+ * surface in the UI.
+ *
+ * Note this is the *modelled* figure — an actual IRS voucher is paid in whole
+ * dollars, so expect a sub-dollar difference against what you really remit.
+ */
+export const MONEY_DP = 3;
+
+/** Round to a tenth of a cent. */
+export function roundMoney(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
@@ -112,12 +129,12 @@ export function taxInstallments(settings: TaxSettings): TaxInstallment[] {
       for (let m = 1; m <= period.throughMonth; m++) {
         const key = monthKey(year, m);
         const value = monthlyProfit[key];
-        if (typeof value === "number" && Number.isFinite(value)) ytdProfit += value;
+        if (typeof value === "number" && Number.isFinite(value)) ytdProfit = roundMoney(ytdProfit + value);
         else missingMonths.push(key);
       }
 
-      const ytdLiability = Math.max(0, Math.round(ytdProfit * rate));
-      const amount = Math.max(0, ytdLiability - priorScheduled);
+      const ytdLiability = Math.max(0, roundMoney(ytdProfit * rate));
+      const amount = Math.max(0, roundMoney(ytdLiability - priorScheduled));
       const dueDate = dueDateFor(year, period);
 
       out.push({
@@ -135,7 +152,7 @@ export function taxInstallments(settings: TaxSettings): TaxInstallment[] {
         missingMonths,
       });
 
-      priorScheduled += amount;
+      priorScheduled = roundMoney(priorScheduled + amount);
     }
   }
 

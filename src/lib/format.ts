@@ -1,11 +1,17 @@
 /** Display formatting helpers shared across the UI. */
 
-export function fmtMoney(n: number, opts: { cents?: boolean; sign?: boolean } = {}): string {
+export function fmtMoney(
+  n: number,
+  opts: { cents?: boolean; sign?: boolean; dp?: number } = {},
+): string {
   const neg = n < 0;
   const abs = Math.abs(n);
+  // `dp` wins when given (the tax panel carries a tenth of a cent); otherwise
+  // `cents` picks the usual 2-or-0.
+  const dp = opts.dp ?? (opts.cents ? 2 : 0);
   const body = abs.toLocaleString("en-US", {
-    minimumFractionDigits: opts.cents ? 2 : 0,
-    maximumFractionDigits: opts.cents ? 2 : 0,
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
   });
   const plus = opts.sign && !neg ? "+" : "";
   return `${neg ? "-" : plus}$${body}`;

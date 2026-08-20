@@ -59,19 +59,19 @@ describe("YTD true-up", () => {
 
   it("credits the prior payment so each installment is only the increment", () => {
     const q2 = schedule[1]!;
-    // YTD through May = 285,272 → liability 99,845; Q1 already covered 50,771.
+    // YTD through May = 285,272 → liability 99,845.20; Q1 already covered 50,771.
     expect(q2.ytdProfit).toBe(285_272);
-    expect(q2.ytdLiability).toBe(99_845);
+    expect(q2.ytdLiability).toBe(99_845.2);
     expect(q2.priorScheduled).toBe(50_771);
-    expect(q2.amount).toBe(49_074);
+    expect(q2.amount).toBe(49_074.2);
   });
 
   it("lets a mid-year loss shrink the next payment", () => {
     const q3 = schedule[2]!;
     // Jun/Jul lose 107,986 against Aug's 39,047 → YTD falls to 216,333.
     expect(q3.ytdProfit).toBe(216_333);
-    expect(q3.ytdLiability).toBe(75_717);
-    // Already scheduled 99,845 > 75,717, so nothing is owed in September.
+    expect(q3.ytdLiability).toBe(75_716.55);
+    // Already scheduled 99,845.20 > 75,716.55, so nothing is owed in September.
     expect(q3.amount).toBe(0);
   });
 
@@ -80,13 +80,39 @@ describe("YTD true-up", () => {
     // Full-year operating profit — ties to the sheet's $45,685 annual total
     // (the dollar of drift is the sheet rounding each month for display).
     expect(q4.ytdProfit).toBe(45_684);
-    expect(q4.ytdLiability).toBe(15_989);
-    expect(q4.amount).toBe(0); // 99,845 already paid — no refund mid-year
+    expect(q4.ytdLiability).toBe(15_989.4);
+    expect(q4.amount).toBe(0); // 99,845.20 already paid — no refund mid-year
   });
 
   it("totals the year's payments at the high-water liability, not the year-end one", () => {
     const total = schedule.reduce((s, i) => s + i.amount, 0);
-    expect(total).toBe(99_845); // peaked at May's YTD; later losses don't refund
+    expect(total).toBeCloseTo(99_845.2, 3); // peaked at May's YTD; later losses don't refund
+  });
+});
+
+describe("precision", () => {
+  it("carries money to a tenth of a cent rather than whole dollars", () => {
+    // The sheet's real figures are unrounded floats; whole-dollar rounding
+    // threw away precision and stopped the totals tying back to the source.
+    const unrounded: TaxSettings = {
+      enabled: true,
+      rate: 0.35,
+      monthlyProfit: { "2026-01": 1_000.005, "2026-02": 2_000.004, "2026-03": 3_000.006 },
+    };
+    const [q1] = taxInstallments(unrounded);
+    expect(q1!.ytdProfit).toBe(6_000.015);
+    expect(q1!.ytdLiability).toBe(2_100.005);
+  });
+
+  it("does not leak binary float noise into the figures", () => {
+    const noisy: TaxSettings = {
+      enabled: true,
+      rate: 0.35,
+      monthlyProfit: { "2026-01": -21_563.570000000065, "2026-02": 14_798.070000000007 },
+    };
+    const [q1] = taxInstallments(noisy);
+    expect(q1!.ytdProfit).toBe(-6_765.5); // not -6765.500000000058
+    expect(q1!.amount).toBe(0);
   });
 });
 

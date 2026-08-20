@@ -44,6 +44,8 @@ export {
   taxInstallments,
   taxEvents,
   profitYears,
+  roundMoney,
   ESTIMATED_TAX_PERIODS,
+  MONEY_DP,
 } from "./adapters/taxes.js";
 export type { TaxInstallment, EstimatedTaxPeriod } from "./adapters/taxes.js";

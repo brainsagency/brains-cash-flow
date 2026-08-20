@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_TAX_RATE,
+  MONEY_DP,
   profitYears,
+  roundMoney,
   taxInstallments,
   type TaxInstallment,
   type TaxSettings,
@@ -24,6 +26,9 @@ interface ProjectionsStatus {
   monthCount: number;
   missingMonths: string[];
 }
+
+/** Panel-wide money format: a tenth of a cent, matching the tax math. */
+const money = (n: number) => fmtMoney(n, { dp: MONEY_DP });
 
 function hoursAgo(iso: string): string {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
@@ -251,7 +256,7 @@ export function TaxesPanel() {
           <div className="field">
             <label>Scheduled cash out ahead</label>
             <div className="val mono" style={{ fontSize: 20, fontWeight: 650, paddingTop: 4 }}>
-              {fmtMoney(upcomingTotal)}
+              {money(upcomingTotal)}
             </div>
             <span className="muted">
               {settings.enabled
@@ -276,7 +281,7 @@ export function TaxesPanel() {
             Quarterly estimated payments
           </h2>
           <div className="spacer" />
-          <span className="pill-total mono">{fmtMoney(upcomingTotal)} ahead</span>
+          <span className="pill-total mono">{money(upcomingTotal)} ahead</span>
         </div>
         <div className="muted" style={{ marginBottom: 14 }}>
           Each due date pays <b>(year-to-date profit × rate) − everything already paid this year</b>, floored at zero.
@@ -292,7 +297,7 @@ export function TaxesPanel() {
                 {staleInstallments.length} installment
                 {staleInstallments.length === 1 ? " is" : "s are"} dated before the forecast starts
               </b>{" "}
-              ({staleInstallments.map((i) => `${i.label} ${i.year}`).join(", ")}, {fmtMoney(staleTotal)} total), so
+              ({staleInstallments.map((i) => `${i.label} ${i.year}`).join(", ")}, {money(staleTotal)} total), so
               they aren&apos;t counted in your cash projection. If they were paid, set <b>Paid through</b> above to
               confirm it. If they weren&apos;t, they&apos;re a real liability the forecast is not showing — add them as
               a one-off withdrawal on the date you expect to pay.
@@ -374,7 +379,7 @@ export function TaxesPanel() {
                 <div className="spacer" />
                 <span className="muted">Year total</span>
                 <span className="mono" style={{ marginLeft: 8, fontWeight: 650 }}>
-                  {fmtMoney(yearTotal)}
+                  {money(yearTotal)}
                 </span>
               </div>
               <div className="amex-grid">
@@ -389,7 +394,7 @@ export function TaxesPanel() {
                         className="m"
                         title={
                           overridden
-                            ? `Typed by hand${typeof synced === "number" ? ` · sheet says ${fmtMoney(synced)}` : ""}`
+                            ? `Typed by hand${typeof synced === "number" ? ` · sheet says ${money(synced)}` : ""}`
                             : typeof synced === "number"
                               ? "From the projections sheet"
                               : "No figure yet"
@@ -402,7 +407,8 @@ export function TaxesPanel() {
                         <span className="prefix">$</span>
                         <input
                           type="number"
-                          value={typeof value === "number" ? value : ""}
+                          value={typeof value === "number" ? roundMoney(value) : ""}
+                          step="0.001"
                           placeholder="—"
                           onChange={(e) =>
                             setOverride(key, e.target.value === "" ? null : Number(e.target.value))
@@ -439,11 +445,11 @@ function ScheduleRow({ installment: i, anchor }: { installment: TaxInstallment; 
         {fmtShortDate(i.dueDate)}
       </td>
       <td style={cell} className={i.ytdProfit < 0 ? "value neg" : undefined}>
-        {fmtMoney(i.ytdProfit)}
+        {money(i.ytdProfit)}
       </td>
-      <td style={cell}>{fmtMoney(i.ytdLiability)}</td>
-      <td style={{ ...cell, color: "var(--text-dim)" }}>{fmtMoney(i.priorScheduled)}</td>
-      <td style={{ ...cell, fontWeight: 650 }}>{fmtMoney(i.amount)}</td>
+      <td style={cell}>{money(i.ytdLiability)}</td>
+      <td style={{ ...cell, color: "var(--text-dim)" }}>{money(i.priorScheduled)}</td>
+      <td style={{ ...cell, fontWeight: 650 }}>{money(i.amount)}</td>
       <td style={{ padding: "8px" }}>
         {i.paid ? (
           <span className="chip neutral">Paid</span>
