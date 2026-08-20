@@ -42,10 +42,11 @@ export { staffToPayroll, terminationFinalPay } from "./adapters/staff.js";
 export type { StaffMember, StaffToPayrollOptions } from "./adapters/staff.js";
 export {
   taxInstallments,
+  taxYearSummaries,
   taxEvents,
   profitYears,
   roundMoney,
   ESTIMATED_TAX_PERIODS,
   MONEY_DP,
 } from "./adapters/taxes.js";
-export type { TaxInstallment, EstimatedTaxPeriod } from "./adapters/taxes.js";
+export type { TaxInstallment, TaxYearSummary, EstimatedTaxPeriod } from "./adapters/taxes.js";

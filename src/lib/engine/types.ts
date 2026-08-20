@@ -250,6 +250,29 @@ export interface Accrual {
  * consumes that number and turns it into dated cash out, which is the one
  * translation the cash-flow tool owns.
  */
+/**
+ * A recorded amount against one quarter's estimated taxes.
+ *
+ * Covers two cases with one shape, because they are the same thing at
+ * different points in time:
+ *  - `paid: true`  — cash that has already left. Excluded from the forecast,
+ *    and credited against the running liability so the NEXT quarter's true-up
+ *    self-corrects for any under/overpayment.
+ *  - `paid: false` — a planned override of the computed amount (you decided to
+ *    pay something other than what the rolling liability suggests). Still
+ *    enters the forecast on its date.
+ */
+export interface TaxPayment {
+  /** Amount paid, or the planned amount to pay. */
+  amount: number;
+  /** When. Defaults to the installment's statutory due date. */
+  date?: ISODate;
+  /** True once the cash has actually left the bank. */
+  paid?: boolean;
+  /** Free-form note — confirmation number, who remitted it, etc. */
+  note?: string;
+}
+
 export interface TaxSettings {
   /** Off → the engine emits no tax disbursements at all. */
   enabled: boolean;
@@ -266,11 +289,17 @@ export interface TaxSettings {
    */
   monthlyProfit?: Record<string, number>;
   /**
-   * Estimated payments already made. Any installment whose due date falls on
-   * or before this leaves the forecast — its cash is already baked into the
-   * starting bank balance. Same guardrail as `payrollPaidThrough`.
+   * Blunt cutoff: any installment due on or before this is treated as paid and
+   * leaves the forecast. Superseded per-quarter by `payments` — use that when
+   * you know the actual amount, and this only as a quick "everything before
+   * here is settled" switch.
    */
   paidThrough?: ISODate;
+  /**
+   * Recorded payments and planned overrides, keyed by installment id
+   * ("2026-Q1"). An entry always wins over the computed true-up amount.
+   */
+  payments?: Record<string, TaxPayment>;
 }
 
 export const DEFAULT_TAX_RATE = 0.35;

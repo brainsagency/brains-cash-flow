@@ -92,13 +92,33 @@ instead of billing tax on months that lost money. The floor at zero reflects
 that the IRS doesn't refund mid-year; an overpayment suppresses later
 installments and settles at filing.
 
-Two controls in the panel:
+### Recording payments
+
+Each installment has a **Record** button. What you enter always beats the
+computed amount, and the entry has two modes:
+
+- **Already paid** — the cash has left. Dropped from the forecast, and credited
+  against the running liability.
+- **Planned** — an amount you have decided to pay instead of what the true-up
+  suggests. Still leaves the bank, on the date you give.
+
+Either way, later quarters true up against **what was actually applied**, not
+what was theoretically owed. Underpay Q1 by $10,771 and Q2 rises from $49,074
+to $59,845 — the shortfall rolls forward. Overpay and the next quarter shrinks.
+That is the difference between tracking payments and just flagging them paid.
+
+The schedule shows the whole chain per quarter: profit for that period alone,
+the liability it added (negative when the quarter lost money), the running
+liability YTD, what had been applied before it, the payment, and the balance
+still owed after it. A year summary strip sits above with liability accrued to
+date, projected full-year, paid so far, scheduled ahead, and still to fund.
+
+### Other controls
 
 - **Blended tax rate** — defaults to 35%, matching the model's
   `Federal Estimated Taxes (35%)` row.
-- **Paid through** — installments due on or before this date drop out of the
-  forecast, because their cash already left the bank and is baked into the
-  starting balance. Same guardrail as `payrollPaidThrough` for payroll runs.
+- **Paid through** — a blunt "everything before here is settled" cutoff, for
+  when you don't want to enter amounts. A per-quarter record supersedes it.
 
 Payments land on the **Taxes** disbursement line (its own line, like Freelance),
 on `committed` basis — a tax payment is real cash on a known date, so it belongs

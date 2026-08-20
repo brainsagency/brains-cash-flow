@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ESTIMATED_TAX_PERIODS, profitYears, taxEvents, taxInstallments } from "./taxes.js";
+import {
+  ESTIMATED_TAX_PERIODS,
+  profitYears,
+  taxEvents,
+  taxInstallments,
+  taxYearSummaries,
+} from "./taxes.js";
 import type { TaxSettings } from "../types.js";
 
 /**
@@ -62,7 +68,7 @@ describe("YTD true-up", () => {
     // YTD through May = 285,272 → liability 99,845.20; Q1 already covered 50,771.
     expect(q2.ytdProfit).toBe(285_272);
     expect(q2.ytdLiability).toBe(99_845.2);
-    expect(q2.priorScheduled).toBe(50_771);
+    expect(q2.appliedBefore).toBe(50_771);
     expect(q2.amount).toBe(49_074.2);
   });
 
@@ -203,7 +209,163 @@ describe("incomplete data", () => {
     expect(schedule).toHaveLength(8);
     // 2027 restarts from zero — 2026's overpayment does not carry across.
     const y2027Q1 = schedule.find((i) => i.id === "2027-Q1")!;
-    expect(y2027Q1.priorScheduled).toBe(0);
+    expect(y2027Q1.appliedBefore).toBe(0);
     expect(y2027Q1.amount).toBe(35_000);
+  });
+});
+
+describe("per-quarter liability", () => {
+  const schedule = taxInstallments(base);
+
+  it("reports what each period alone earned, separate from the running total", () => {
+    // Q2 covers Apr–May only: 57,876 + 82,336.
+    const q2 = schedule[1]!;
+    expect(q2.quarterProfit).toBe(140_212);
+    expect(q2.ytdProfit).toBe(285_272);
+  });
+
+  it("shows a loss-making quarter as reducing the year's liability", () => {
+    // Q3 (Jun–Aug) loses 68,939 net, so it takes the running liability DOWN.
+    const q3 = schedule[2]!;
+    expect(q3.quarterProfit).toBe(-68_939);
+    expect(q3.quarterLiability).toBeCloseTo(-24_128.65, 3);
+    expect(q3.ytdLiability).toBe(75_716.55);
+  });
+
+  it("makes the quarter liabilities sum to the full-year figure", () => {
+    const sum = schedule.reduce((s, i) => s + i.quarterLiability, 0);
+    expect(sum).toBeCloseTo(schedule[3]!.ytdLiability, 3);
+  });
+
+  it("closes each period on the last day of its final month", () => {
+    expect(schedule.map((i) => i.periodEnd)).toEqual([
+      "2026-03-31",
+      "2026-05-31",
+      "2026-08-31",
+      "2026-12-31",
+    ]);
+  });
+});
+
+describe("recorded payments", () => {
+  it("credits an actual payment so the next quarter trues up against it", () => {
+    // Paid only 30,000 in April against a 50,771.19 liability.
+    const short = taxInstallments({
+      ...base,
+      payments: { "2026-Q1": { amount: 30_000, paid: true } },
+    });
+    expect(short[0]!.amount).toBe(30_000);
+    expect(short[0]!.balance).toBeCloseTo(20_771, 3); // still owed after Q1
+    // June must now cover the shortfall as well as its own increment.
+    expect(short[1]!.appliedBefore).toBe(30_000);
+    expect(short[1]!.scheduledAmount).toBeCloseTo(69_845.2, 3);
+    expect(short[1]!.amount).toBeCloseTo(69_845.2, 3);
+  });
+
+  it("lowers the next quarter when you overpay", () => {
+    const over = taxInstallments({
+      ...base,
+      payments: { "2026-Q1": { amount: 90_000, paid: true } },
+    });
+    expect(over[0]!.balance).toBeCloseTo(-39_229, 3); // overpaid
+    expect(over[1]!.amount).toBeCloseTo(9_845.2, 3); // 99,845.20 − 90,000
+  });
+
+  it("never asks for a negative payment, however large the overpayment", () => {
+    const huge = taxInstallments({
+      ...base,
+      payments: { "2026-Q1": { amount: 500_000, paid: true } },
+    });
+    expect(huge.slice(1).every((i) => i.amount === 0)).toBe(true);
+    expect(huge[3]!.balance).toBeCloseTo(-484_010.6, 3);
+  });
+
+  it("treats an unpaid entry as a planned override that still costs cash", () => {
+    const planned = taxInstallments({
+      ...base,
+      payments: { "2026-Q2": { amount: 40_000, paid: false, date: "2026-07-01" } },
+    });
+    const q2 = planned[1]!;
+    expect(q2.overridden).toBe(true);
+    expect(q2.paid).toBe(false);
+    expect(q2.amount).toBe(40_000);
+    expect(q2.date).toBe("2026-07-01");
+    const events = taxEvents({
+      ...base,
+      payments: { "2026-Q2": { amount: 40_000, paid: false, date: "2026-07-01" } },
+    });
+    expect(events.find((e) => e.id === "tax:2026-Q2")).toMatchObject({
+      amount: 40_000,
+      date: "2026-07-01",
+    });
+  });
+
+  it("keeps a paid installment out of the forecast", () => {
+    const events = taxEvents({
+      ...base,
+      payments: { "2026-Q1": { amount: 50_771, paid: true } },
+    });
+    expect(events.map((e) => e.id)).toEqual(["tax:2026-Q2"]);
+  });
+
+  it("lets a per-quarter entry override the blunt paidThrough cutoff", () => {
+    // paidThrough would mark Q1 paid; the explicit entry says otherwise.
+    const schedule = taxInstallments({
+      ...base,
+      paidThrough: "2026-12-31",
+      payments: { "2026-Q1": { amount: 50_771, paid: false } },
+    });
+    expect(schedule[0]!.paid).toBe(false);
+    expect(schedule[1]!.paid).toBe(true); // still covered by the cutoff
+  });
+
+  it("carries the note through to the ledger memo", () => {
+    const events = taxEvents({
+      ...base,
+      payments: { "2026-Q2": { amount: 1_000, note: "per Upsourced voucher" } },
+    });
+    expect(events.find((e) => e.id === "tax:2026-Q2")!.memo).toContain("per Upsourced voucher");
+  });
+});
+
+describe("year summary", () => {
+  it("counts liability only through periods that have actually closed", () => {
+    // 20 Aug: Q1 and Q2 have closed (Mar 31, May 31); Q3 ends Aug 31.
+    const [s] = taxYearSummaries(taxInstallments(base), "2026-08-20");
+    expect(s!.liabilityToDate).toBe(99_845.2);
+    expect(s!.liabilityFullYear).toBe(15_989.4);
+  });
+
+  it("picks up a period the moment it closes", () => {
+    const [s] = taxYearSummaries(taxInstallments(base), "2026-08-31");
+    expect(s!.liabilityToDate).toBe(75_716.55); // Q3 now closed
+  });
+
+  it("splits paid from still-to-fund", () => {
+    const [s] = taxYearSummaries(
+      taxInstallments({ ...base, payments: { "2026-Q1": { amount: 50_771, paid: true } } }),
+      "2026-08-20",
+    );
+    expect(s!.paidToDate).toBe(50_771);
+    expect(s!.scheduledAhead).toBeCloseTo(49_074.2, 3);
+    // Overpaid for the year, because the year ends in a loss.
+    expect(s!.outstanding).toBeCloseTo(15_989.4 - 50_771, 3);
+  });
+
+  it("prices a fractional overpayment through to the next quarter", () => {
+    // Paying 18.9c more than Q1 owed leaves Q2 exactly that much lighter.
+    const rows = taxInstallments({
+      ...base,
+      payments: { "2026-Q1": { amount: 50_771.189, paid: true } },
+    });
+    expect(rows[1]!.amount).toBeCloseTo(49_074.011, 3);
+  });
+
+  it("summarises each year separately", () => {
+    const two = taxInstallments({
+      ...base,
+      monthlyProfit: { ...PROFIT_2026, "2027-01": 100_000 },
+    });
+    expect(taxYearSummaries(two, "2026-08-20").map((s) => s.year)).toEqual([2026, 2027]);
   });
 });

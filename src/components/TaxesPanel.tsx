@@ -7,11 +7,14 @@ import {
   profitYears,
   roundMoney,
   taxInstallments,
+  taxYearSummaries,
   type TaxInstallment,
+  type TaxPayment,
   type TaxSettings,
 } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
-import { fmtMoney, fmtShortDate } from "@/lib/format.js";
+import { MoneyInput } from "@/components/fields.js";
+import { fmtMoney, fmtShortDate, todayISO } from "@/lib/format.js";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -49,6 +52,8 @@ export function TaxesPanel() {
   const [status, setStatus] = useState<ProjectionsStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  /** Installment id whose payment row is open for editing, if any. */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const settings: TaxSettings = input.taxes ?? { enabled: false, rate: DEFAULT_TAX_RATE };
   const merged = settings.monthlyProfit ?? {};
@@ -100,6 +105,16 @@ export function TaxesPanel() {
       return { ...prev, taxes: { ...base, monthlyProfit: next } };
     });
 
+  /** Record (or clear, with null) the payment against one installment. */
+  const setPayment = (id: string, entry: TaxPayment | null) =>
+    setInput((prev) => {
+      const b = prev.taxes ?? { enabled: false, rate: DEFAULT_TAX_RATE };
+      const next = { ...(b.payments ?? {}) };
+      if (entry === null) delete next[id];
+      else next[id] = entry;
+      return { ...prev, taxes: { ...b, payments: next } };
+    });
+
   // Drop every hand-typed month so the sheet takes over. Guarded on there
   // actually being synced figures — otherwise this quietly empties the
   // schedule, which looks like a bug rather than a choice.
@@ -124,6 +139,7 @@ export function TaxesPanel() {
   const upcoming = installments.filter((i) => !i.paid && i.amount > 0 && i.dueDate >= anchor);
   const upcomingTotal = upcoming.reduce((s, i) => s + i.amount, 0);
   const ratePct = (settings.rate ?? DEFAULT_TAX_RATE) * 100;
+  const summaries = taxYearSummaries(installments, todayISO());
 
   return (
     <div className="grid" style={{ gap: 20 }}>
@@ -289,6 +305,36 @@ export function TaxesPanel() {
           taxes actually settle. Note the IRS periods are 3, 2, 3, and 4 months long, not even quarters.
         </div>
 
+        {summaries.map((y) => (
+          <div className="amex-section" key={y.year} style={{ marginBottom: 16 }}>
+            <div className="row" style={{ marginBottom: 10 }}>
+              <b style={{ fontSize: 13 }}>{y.year} liability</b>
+            </div>
+            <div className="aging">
+              <div className="a" title="Liability accrued through the last estimated-tax period that has closed">
+                Accrued to date
+                <b>{money(y.liabilityToDate)}</b>
+              </div>
+              <div className="a" title="Full-year liability on current projections">
+                Full year (projected)
+                <b>{money(y.liabilityFullYear)}</b>
+              </div>
+              <div className="a" title="Sum of installments recorded as paid">
+                Paid so far
+                <b>{money(y.paidToDate)}</b>
+              </div>
+              <div className="a" title="Unpaid installments still in the forecast">
+                Scheduled ahead
+                <b>{money(y.scheduledAhead)}</b>
+              </div>
+              <div className={`a${y.outstanding > 0 ? " danger" : ""}`} title="Full-year liability less what has been paid. Negative means overpaid.">
+                {y.outstanding < 0 ? "Overpaid" : "Still to fund"}
+                <b>{money(Math.abs(y.outstanding))}</b>
+              </div>
+            </div>
+          </div>
+        ))}
+
         {staleInstallments.length > 0 && (
           <div className="alert warning" style={{ marginBottom: 14 }}>
             <span className="ico">🗓️</span>
@@ -298,9 +344,9 @@ export function TaxesPanel() {
                 {staleInstallments.length === 1 ? " is" : "s are"} dated before the forecast starts
               </b>{" "}
               ({staleInstallments.map((i) => `${i.label} ${i.year}`).join(", ")}, {money(staleTotal)} total), so
-              they aren&apos;t counted in your cash projection. If they were paid, set <b>Paid through</b> above to
-              confirm it. If they weren&apos;t, they&apos;re a real liability the forecast is not showing — add them as
-              a one-off withdrawal on the date you expect to pay.
+              they aren&apos;t counted in your cash projection. Hit <b>Record</b> on the row to enter what was actually
+              paid — that both clears this and trues up later quarters against the real figure. If it wasn&apos;t
+              paid, record it with a future date instead so the forecast can see it.
             </span>
           </div>
         )}
@@ -313,21 +359,47 @@ export function TaxesPanel() {
           </div>
         ) : (
           <div className="table-scroll">
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1000 }}>
               <thead>
                 <tr style={{ textAlign: "right", color: "var(--text-dim)", fontSize: 12 }}>
                   <th style={{ textAlign: "left", padding: "6px 8px" }}>Period</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Due</th>
-                  <th style={{ padding: "6px 8px" }}>YTD profit</th>
-                  <th style={{ padding: "6px 8px" }}>YTD liability</th>
-                  <th style={{ padding: "6px 8px" }}>Already paid</th>
+                  <th style={{ padding: "6px 8px" }} title="Operating profit from this period's months alone">
+                    Profit (qtr)
+                  </th>
+                  <th style={{ padding: "6px 8px" }} title="What this period added to what you owe. Negative when the quarter lost money.">
+                    Liability (qtr)
+                  </th>
+                  <th style={{ padding: "6px 8px" }} title="Running total of liability for the year through this period">
+                    Liability YTD
+                  </th>
+                  <th style={{ padding: "6px 8px" }} title="Total applied against the year before this installment">
+                    Applied before
+                  </th>
                   <th style={{ padding: "6px 8px" }}>Payment</th>
+                  <th style={{ padding: "6px 8px" }} title="Still owed for the year after this installment. Negative = overpaid.">
+                    Balance
+                  </th>
                   <th style={{ textAlign: "left", padding: "6px 8px" }}>Status</th>
+                  <th style={{ padding: "6px 8px" }} />
                 </tr>
               </thead>
               <tbody>
                 {installments.map((i) => (
-                  <ScheduleRow key={i.id} installment={i} anchor={anchor} />
+                  <ScheduleRow
+                    key={i.id}
+                    installment={i}
+                    anchor={anchor}
+                    editing={editingId === i.id}
+                    onEdit={() => setEditingId(editingId === i.id ? null : i.id)}
+                    onSave={(entry) => {
+                      setPayment(i.id, entry);
+                      setEditingId(null);
+                    }}
+                    onClear={() => {
+                      setPayment(i.id, null);
+                      setEditingId(null);
+                    }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -427,47 +499,163 @@ export function TaxesPanel() {
   );
 }
 
-function ScheduleRow({ installment: i, anchor }: { installment: TaxInstallment; anchor: string }) {
+function ScheduleRow({
+  installment: i,
+  anchor,
+  editing,
+  onEdit,
+  onSave,
+  onClear,
+}: {
+  installment: TaxInstallment;
+  anchor: string;
+  editing: boolean;
+  onEdit: () => void;
+  onSave: (entry: TaxPayment) => void;
+  onClear: () => void;
+}) {
   // Before the anchor the engine cannot place the event at all, so this is
   // "not in the forecast", which is a stronger statement than "late".
-  const stale = !i.paid && i.amount > 0 && i.dueDate < anchor;
+  const stale = !i.paid && i.amount > 0 && i.date < anchor;
   const cell = { padding: "8px", textAlign: "right" as const, fontVariantNumeric: "tabular-nums" as const };
+
+  const [amount, setAmount] = useState(i.amount);
+  const [date, setDate] = useState(i.date);
+  const [paid, setPaid] = useState(i.paid);
+  const [note, setNote] = useState(i.payment?.note ?? "");
+  // Re-seed the draft whenever the row is (re)opened, so it starts from what
+  // the schedule currently says rather than a stale edit.
+  useEffect(() => {
+    if (editing) {
+      setAmount(i.amount);
+      setDate(i.date);
+      setPaid(i.paid);
+      setNote(i.payment?.note ?? "");
+    }
+  }, [editing, i.amount, i.date, i.paid, i.payment?.note]);
+
   return (
-    <tr style={{ borderTop: "1px solid var(--border)" }}>
-      <td style={{ padding: "8px", fontWeight: 600 }}>
-        {i.label} {i.year}
-        <div className="muted">
-          {i.fromMonth.slice(5)}–{i.throughMonth.slice(5)}
-          {i.missingMonths.length > 0 ? ` · ${i.missingMonths.length} month(s) missing` : ""}
-        </div>
-      </td>
-      <td style={{ padding: "8px" }} className="mono">
-        {fmtShortDate(i.dueDate)}
-      </td>
-      <td style={cell} className={i.ytdProfit < 0 ? "value neg" : undefined}>
-        {money(i.ytdProfit)}
-      </td>
-      <td style={cell}>{money(i.ytdLiability)}</td>
-      <td style={{ ...cell, color: "var(--text-dim)" }}>{money(i.priorScheduled)}</td>
-      <td style={{ ...cell, fontWeight: 650 }}>{money(i.amount)}</td>
-      <td style={{ padding: "8px" }}>
-        {i.paid ? (
-          <span className="chip neutral">Paid</span>
-        ) : i.amount === 0 ? (
-          <span className="chip neutral" title="Losses since the last payment wiped out the incremental liability">
-            Nothing owed
-          </span>
-        ) : stale ? (
-          <span
-            className="chip danger"
-            title="Dated before the forecast start, so it is not counted in the projection. Set 'Paid through' if it has been paid."
-          >
-            Not in forecast
-          </span>
-        ) : (
-          <span className="chip committed">Scheduled</span>
-        )}
-      </td>
-    </tr>
+    <>
+      <tr style={{ borderTop: "1px solid var(--border)" }}>
+        <td style={{ padding: "8px", fontWeight: 600 }}>
+          {i.label} {i.year}
+          <div className="muted">
+            {i.fromMonth.slice(5)}–{i.throughMonth.slice(5)} · due {fmtShortDate(i.dueDate)}
+            {i.missingMonths.length > 0 ? ` · ${i.missingMonths.length} month(s) missing` : ""}
+          </div>
+        </td>
+        <td style={cell} className={i.quarterProfit < 0 ? "value neg" : undefined}>
+          {money(i.quarterProfit)}
+        </td>
+        <td style={cell} className={i.quarterLiability < 0 ? "value neg" : undefined}>
+          {money(i.quarterLiability)}
+        </td>
+        <td style={{ ...cell, fontWeight: 600 }}>{money(i.ytdLiability)}</td>
+        <td style={{ ...cell, color: "var(--text-dim)" }}>{money(i.appliedBefore)}</td>
+        <td style={{ ...cell, fontWeight: 650 }}>
+          {money(i.amount)}
+          {i.overridden && (
+            <div className="muted" title={`Rolling true-up says ${money(i.scheduledAmount)}`}>
+              ✎ vs {money(i.scheduledAmount)}
+            </div>
+          )}
+          {!i.overridden && i.date !== i.dueDate && <div className="muted">{fmtShortDate(i.date)}</div>}
+        </td>
+        <td style={{ ...cell, color: i.balance > 0 ? "var(--red)" : "var(--text-dim)" }}>{money(i.balance)}</td>
+        <td style={{ padding: "8px" }}>
+          {i.paid ? (
+            <span className="chip committed" title={i.payment?.note || "Recorded as paid"}>
+              Paid
+            </span>
+          ) : i.amount === 0 ? (
+            <span className="chip neutral" title="Payments to date already cover the liability accrued so far">
+              Nothing owed
+            </span>
+          ) : stale ? (
+            <span
+              className="chip danger"
+              title="Dated before the forecast start, so it is not counted in the projection. Record the payment if it has been made."
+            >
+              Not in forecast
+            </span>
+          ) : (
+            <span className="chip committed">Scheduled</span>
+          )}
+        </td>
+        <td style={{ padding: "8px", textAlign: "right" }}>
+          <button className="btn sm ghost" onClick={onEdit}>
+            {editing ? "Close" : i.payment ? "Edit" : "Record"}
+          </button>
+        </td>
+      </tr>
+
+      {editing && (
+        <tr>
+          <td colSpan={9} style={{ padding: "0 8px 14px" }}>
+            <div className="lever-card" style={{ marginBottom: 0 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "130px 150px auto 1fr auto",
+                  gap: 10,
+                  alignItems: "end",
+                }}
+              >
+                <div className="field">
+                  <label>Amount</label>
+                  <MoneyInput value={amount} onChange={setAmount} step="0.001" />
+                </div>
+                <div className="field">
+                  <label>Date</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>&nbsp;</label>
+                  <label className="toggle" style={{ paddingBottom: 8 }}>
+                    <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+                    Already paid
+                  </label>
+                </div>
+                <div className="field">
+                  <label>Note</label>
+                  <input
+                    value={note}
+                    placeholder="confirmation no., who remitted…"
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                </div>
+                <div className="field" style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn sm primary"
+                    onClick={() => onSave({ amount, date, paid, ...(note ? { note } : {}) })}
+                  >
+                    Save
+                  </button>
+                  {i.payment && (
+                    <button className="btn sm ghost" onClick={onClear} title="Go back to the rolling true-up amount">
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="muted" style={{ marginTop: 10 }}>
+                {paid ? (
+                  <>
+                    Recorded as <b>paid</b>: dropped from the cash forecast, and credited against the running
+                    liability — so {money(i.ytdLiability)} owed to date less what you enter here rolls into the next
+                    quarter.
+                  </>
+                ) : (
+                  <>
+                    A <b>planned</b> amount: overrides the rolling true-up of {money(i.scheduledAmount)} and still
+                    leaves the bank on the date above. Later quarters true up against it.
+                  </>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
