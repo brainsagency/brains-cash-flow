@@ -28,6 +28,7 @@ import {
   addDays,
   isValidISODate,
   staffToPayroll,
+  taxEvents,
   terminationFinalPay,
   type CashEvent,
   type ForecastInput,
@@ -92,6 +93,29 @@ interface AppState {
 
 export type StorageMode = "cloud" | "local";
 
+/**
+ * The projections-sheet snapshot behind the tax schedule. `monthlyProfit` is
+ * what the sheet says; the Taxes panel can override any month by hand, and
+ * those overrides live in `input.taxes.monthlyProfit`.
+ */
+export interface ProjectionsFeed {
+  syncedAt: string | null;
+  tabTitle: string | null;
+  matchedLabel: string | null;
+  year: number | null;
+  monthlyProfit: Record<string, number>;
+  missingMonths: string[];
+}
+
+const EMPTY_PROJECTIONS: ProjectionsFeed = {
+  syncedAt: null,
+  tabTitle: null,
+  matchedLabel: null,
+  year: null,
+  monthlyProfit: {},
+  missingMonths: [],
+};
+
 interface Store {
   input: ForecastInput; // MERGED (manual + synced AR/AP)
   scenarios: Scenario[];
@@ -106,6 +130,15 @@ interface Store {
   /** Raw synced AR / AP events (before exclusions/overrides) for the ledgers. */
   syncedArRaw: CashEvent[] | null;
   syncedApRaw: CashEvent[] | null;
+  /** Monthly operating profit synced from the projections sheet, and when. */
+  projections: ProjectionsFeed;
+  /**
+   * Hand-entered monthly profit, keyed "YYYY-MM" — the manual layer only, so
+   * the panel can show which months were typed over the sheet.
+   */
+  taxOverrides: Record<string, number>;
+  /** Re-read the projections sheet snapshot from the server. */
+  refreshProjections: () => Promise<void>;
   adjustments: Record<string, Adjustment>;
   /** Patch a synced item's adjustment; `date: null` clears the override. */
   setAdjustment: (id: string, patch: { excluded?: boolean; date?: string | null }) => void;
@@ -205,6 +238,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [syncedAp, setSyncedAp] = useState<CashEvent[] | null>(null);
   const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
   const [reimbursedThrough, setReimbursedThrough] = useState<string | null>(null);
+  const [projections, setProjections] = useState<ProjectionsFeed>(EMPTY_PROJECTIONS);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Optimistic-concurrency + reliable-save bookkeeping (all refs so they're
   // current inside async saves and window event handlers without re-rendering).
@@ -307,10 +341,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshProjections = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projections/data", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as ProjectionsFeed;
+      setProjections({ ...EMPTY_PROJECTIONS, ...data });
+    } catch {
+      /* endpoint unavailable — fall back to hand-entered profit figures */
+    }
+  }, []);
+
   useEffect(() => {
     void refreshQbo();
     void refreshBill();
-  }, [refreshQbo, refreshBill]);
+    void refreshProjections();
+  }, [refreshQbo, refreshBill, refreshProjections]);
 
   // Replace the local workspace with the server's copy (a newer version another
   // session saved). Marked to suppress the write the resulting state change
@@ -570,6 +616,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.input]);
 
+  // Taxes: fold the synced projections sheet under any hand-entered monthly
+  // profit (a typed figure always beats the sheet, so a known correction isn't
+  // clobbered by the next nightly sync), then expand the result into quarterly
+  // `taxes` disbursements on the IRS due dates. Off by default — no tax
+  // settings, or `enabled: false`, means no tax events at all.
+  const taxBase = useMemo<ForecastInput>(() => {
+    const settings = staffBase.taxes;
+    if (!settings?.enabled) return staffBase;
+    const merged = {
+      ...settings,
+      monthlyProfit: { ...projections.monthlyProfit, ...(settings.monthlyProfit ?? {}) },
+    };
+    const events = taxEvents(merged);
+    // Keep the merged profit on the input so the panel and the forecast read
+    // the same numbers rather than each recombining the two layers.
+    return { ...staffBase, taxes: merged, events: [...(staffBase.events ?? []), ...events] };
+  }, [staffBase, projections.monthlyProfit]);
+
   // Merge: synced QuickBooks AR replaces manual current/overdue AR; synced
   // Bill.com AP replaces manual accountsPayable (apEstimate stays manual).
   // Per-item adjustments apply to both: excluded items drop from the forecast;
@@ -579,8 +643,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Suppress the projected MC reimbursement receipt for periods already covered
     // by a real reimbursement invoice (the invoice, kept as AR, takes over).
     const base: ForecastInput = reimbursedThrough
-      ? { ...staffBase, recurring: gateReimbursementReceipts(staffBase.recurring ?? [], reimbursedThrough) }
-      : staffBase;
+      ? { ...taxBase, recurring: gateReimbursementReceipts(taxBase.recurring ?? [], reimbursedThrough) }
+      : taxBase;
     const hasAr = syncedAr && syncedAr.length > 0;
     const hasAp = syncedAp && syncedAp.length > 0;
     if (!hasAr && !hasAp) return base;
@@ -588,12 +652,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (hasAr) events = events.filter((e) => !QBO_AR_CATEGORIES.has(e.category));
     if (hasAp) events = events.filter((e) => !BILL_AP_CATEGORIES.has(e.category));
 
-    const anchor = staffBase.anchorDate;
+    const anchor = taxBase.anchorDate;
     const clampToAnchor = (d: string) => (d < anchor ? anchor : d);
     // AR collection lag: shift receipts past their due date (clients rarely pay
     // on time). Applied only to AR, and only when the invoice has no explicit
     // date override.
-    const arLag = Math.max(0, Math.round(staffBase.arCollectionLagDays ?? 0));
+    const arLag = Math.max(0, Math.round(taxBase.arCollectionLagDays ?? 0));
     const applyAdjustments = (list: CashEvent[], lagDays: number) =>
       list.flatMap((e) => {
         const adj = state.adjustments[e.id ?? ""] ?? {};
@@ -617,7 +681,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...applyAdjustments(hasAp ? syncedAp : [], 0),
       ],
     };
-  }, [staffBase, state.adjustments, syncedAr, syncedAp, reimbursedThrough]);
+  }, [taxBase, state.adjustments, syncedAr, syncedAp, reimbursedThrough]);
 
   return (
     <StoreContext.Provider
@@ -631,6 +695,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         billSyncedAt,
         syncedArRaw: syncedAr,
         syncedApRaw: syncedAp,
+        projections,
+        taxOverrides: state.input.taxes?.monthlyProfit ?? {},
+        refreshProjections,
         adjustments: state.adjustments,
         setAdjustment,
         setInput,

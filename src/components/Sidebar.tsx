@@ -8,6 +8,7 @@ export type ViewKey =
   | "bills"
   | "opex"
   | "staff"
+  | "taxes"
   | "scenarios"
   | "insights"
   | "assumptions";
@@ -18,6 +19,7 @@ export const NAV: Array<{ key: ViewKey; label: string; title: string; eyebrow: s
   { key: "bills", label: "Bills to Pay (AP)", title: "Bills to Pay (AP)", eyebrow: "Payables", icon: <IconBill /> },
   { key: "opex", label: "Operating Expenses", title: "Operating Expenses", eyebrow: "Recurring costs", icon: <IconRepeat /> },
   { key: "staff", label: "Staff Roster", title: "Staff Roster", eyebrow: "Payroll", icon: <IconPeople /> },
+  { key: "taxes", label: "Taxes", title: "Taxes", eyebrow: "Quarterly estimated payments", icon: <IconReceipt /> },
   { key: "scenarios", label: "Scenarios", title: "Scenario planning", eyebrow: "What-ifs", icon: <IconLayers /> },
   { key: "insights", label: "Insights", title: "Insights", eyebrow: "Analysis", icon: <IconPie /> },
   { key: "assumptions", label: "Assumptions", title: "Assumptions & settings", eyebrow: "Configuration", icon: <IconGear /> },
@@ -159,6 +161,14 @@ function IconPeople() {
       <circle cx="9" cy="7" r="3" />
       <path d="M22 20v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13A4 4 0 0 1 16 11" />
+    </>,
+  );
+}
+function IconReceipt() {
+  return svg(
+    <>
+      <path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21z" />
+      <path d="M9 8h6M9 12h6" />
     </>,
   );
 }

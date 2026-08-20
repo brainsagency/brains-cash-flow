@@ -68,10 +68,12 @@ const LABELS: Record<string, string> = {
   payroll: "payroll",
   operatingExpense: "operating expense",
   amex: "American Express",
+  freelance: "freelance",
   otherWithdrawals: "other withdrawals",
   accountsPayable: "accounts payable",
   apEstimate: "AP estimate",
   bonusAccruals: "bonus accruals",
+  taxes: "estimated taxes",
 };
 
 function humanCategory(key: string): string {

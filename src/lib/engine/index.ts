@@ -40,3 +40,10 @@ export type { MonthlyRow } from "./rollup.js";
 export { narrate } from "./narrative.js";
 export { staffToPayroll, terminationFinalPay } from "./adapters/staff.js";
 export type { StaffMember, StaffToPayrollOptions } from "./adapters/staff.js";
+export {
+  taxInstallments,
+  taxEvents,
+  profitYears,
+  ESTIMATED_TAX_PERIODS,
+} from "./adapters/taxes.js";
+export type { TaxInstallment, EstimatedTaxPeriod } from "./adapters/taxes.js";

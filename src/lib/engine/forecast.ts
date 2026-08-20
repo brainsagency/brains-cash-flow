@@ -45,6 +45,7 @@ function emptyDisbursements(): DisbursementBreakdown {
     accountsPayable: 0,
     apEstimate: 0,
     bonusAccruals: 0,
+    taxes: 0,
   };
 }
 

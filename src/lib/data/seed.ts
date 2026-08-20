@@ -35,7 +35,6 @@ export const SEED_INPUT: ForecastInput = {
     { id: "ap1", category: "accountsPayable", amount: 45_000, date: "2026-07-20", memo: "Media buy — vendor (sample)" },
     { id: "ap2", category: "accountsPayable", amount: 28_000, date: "2026-08-05", memo: "Contract dev — vendor (sample)" },
     { id: "ap3", category: "accountsPayable", amount: 16_500, date: "2026-08-22", memo: "SaaS & tools (sample)" },
-    { id: "tax", category: "otherWithdrawals", amount: 90_000, date: "2026-09-15", memo: "Quarterly tax set-aside (sample)" },
     { id: "dist", category: "otherWithdrawals", amount: 75_000, date: "2026-10-01", memo: "Owner distribution (sample)" },
   ],
   pipeline: [
@@ -63,6 +62,31 @@ export const SEED_INPUT: ForecastInput = {
   ],
   includePipeline: false,
   includeBudgeted: false,
+  /**
+   * Quarterly estimated taxes. The monthly figures are the real "Projected
+   * Operating Profit" row from Brains Projections 2026 (read 2026-08-20), so a
+   * fresh install models taxes correctly before the Sheets sync is wired up.
+   * They live in the manual layer, which means they OVERRIDE the sheet once it
+   * syncs — the Taxes panel has a "Use sheet values" button to drop them.
+   */
+  taxes: {
+    enabled: true,
+    rate: 0.35,
+    monthlyProfit: {
+      "2026-01": -21_564,
+      "2026-02": 14_798,
+      "2026-03": 151_826,
+      "2026-04": 57_876,
+      "2026-05": 82_336,
+      "2026-06": -71_621,
+      "2026-07": -36_365,
+      "2026-08": 39_047,
+      "2026-09": 28_168,
+      "2026-10": -34_803,
+      "2026-11": -21_332,
+      "2026-12": -142_682,
+    },
+  },
   accruals: [
     { id: "bonus", name: "Bonus", beginningBalance: 220_000, accrualPerMonth: 25_000 },
     { id: "cordelle", name: "Cordelle Payment", beginningBalance: 60_000, accrualPerMonth: 0 },

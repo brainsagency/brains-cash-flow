@@ -62,8 +62,24 @@ export interface BillSyncResult {
   reconciliation: ApReconciliation | null; // vs QBO Bills
 }
 
+/** Last read of the projections sheet: monthly operating profit + provenance. */
+export interface ProjectionsSyncResult {
+  syncedAt: string;
+  spreadsheetId: string;
+  /** Tab actually read (resolved from config or by year). */
+  tabTitle: string;
+  /** Row label matched, as written in the sheet. */
+  matchedLabel: string;
+  /** Calendar year the figures were keyed to. */
+  year: number;
+  /** Operating profit keyed "YYYY-MM". */
+  monthlyProfit: Record<string, number>;
+  /** Months the row had no usable value for — surfaced as a gap in the UI. */
+  missingMonths: string[];
+}
+
 export interface SyncLogEntry {
-  source: "qbo" | "billdotcom" | "bank";
+  source: "qbo" | "billdotcom" | "bank" | "projections";
   startedAt: string;
   finishedAt: string;
   status: "ok" | "error";
@@ -116,6 +132,12 @@ export function saveBankSync(r: BankSyncResult): Promise<void> {
 }
 export function getLastBankSync(): Promise<BankSyncResult | null> {
   return isSupabaseConfigured() ? sbGetLastBankSync() : fileGetLastBankSync();
+}
+export function saveProjectionsSync(r: ProjectionsSyncResult): Promise<void> {
+  return isSupabaseConfigured() ? sbSaveProjectionsSync(r) : fileSaveProjectionsSync(r);
+}
+export function getLastProjectionsSync(): Promise<ProjectionsSyncResult | null> {
+  return isSupabaseConfigured() ? sbGetLastProjectionsSync() : fileGetLastProjectionsSync();
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +307,39 @@ async function sbGetLastBankSync(): Promise<BankSyncResult | null> {
   };
 }
 
+async function sbSaveProjectionsSync(r: ProjectionsSyncResult): Promise<void> {
+  const { error } = await supabaseAdmin().from("projections_last_sync").upsert({
+    id: "default",
+    synced_at: r.syncedAt,
+    spreadsheet_id: r.spreadsheetId,
+    tab_title: r.tabTitle,
+    matched_label: r.matchedLabel,
+    year: r.year,
+    monthly_profit: r.monthlyProfit,
+    missing_months: r.missingMonths,
+  });
+  if (error) throw new Error(`Supabase saveProjectionsSync: ${error.message}`);
+}
+
+async function sbGetLastProjectionsSync(): Promise<ProjectionsSyncResult | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("projections_last_sync")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) throw new Error(`Supabase getLastProjectionsSync: ${error.message}`);
+  if (!data) return null;
+  return {
+    syncedAt: data.synced_at as string,
+    spreadsheetId: data.spreadsheet_id as string,
+    tabTitle: data.tab_title as string,
+    matchedLabel: data.matched_label as string,
+    year: Number(data.year),
+    monthlyProfit: (data.monthly_profit ?? {}) as Record<string, number>,
+    missingMonths: (data.missing_months ?? []) as string[],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // File backend (dev fallback)
 // ---------------------------------------------------------------------------
@@ -296,6 +351,7 @@ interface FileShape {
   plaidConnection?: PlaidConnection; // legacy single-item; migrated on read
   plaidConnections?: PlaidConnection[];
   bankLastSync?: BankSyncResult;
+  projectionsLastSync?: ProjectionsSyncResult;
   log: SyncLogEntry[];
 }
 
@@ -368,4 +424,10 @@ async function fileSaveBankSync(bankLastSync: BankSyncResult): Promise<void> {
 }
 async function fileGetLastBankSync(): Promise<BankSyncResult | null> {
   return (await fileRead()).bankLastSync ?? null;
+}
+async function fileSaveProjectionsSync(projectionsLastSync: ProjectionsSyncResult): Promise<void> {
+  await fileWrite({ ...(await fileRead()), projectionsLastSync });
+}
+async function fileGetLastProjectionsSync(): Promise<ProjectionsSyncResult | null> {
+  return (await fileRead()).projectionsLastSync ?? null;
 }

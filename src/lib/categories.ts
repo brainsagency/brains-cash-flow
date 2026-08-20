@@ -20,6 +20,7 @@ export const CATEGORY_LABELS: Record<CashCategory, string> = {
   accountsPayable: "Accounts Payable",
   apEstimate: "AP Estimate",
   bonusAccruals: "Bonus Accruals",
+  taxes: "Taxes",
 };
 
 export const RECEIPT_ORDER: readonly ReceiptCategory[] = RECEIPT_CATEGORIES;

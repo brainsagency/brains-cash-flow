@@ -30,7 +30,8 @@ export type DisbursementCategory =
   | "otherWithdrawals" // manual judgment items (owner distributions, Brandy, etc.)
   | "accountsPayable" // known bills (Bill.com)
   | "apEstimate" // estimate for not-yet-entered bills
-  | "bonusAccruals"; // bonus payouts
+  | "bonusAccruals" // bonus payouts
+  | "taxes"; // quarterly estimated income-tax payments
 
 export type CashCategory = ReceiptCategory | DisbursementCategory;
 
@@ -62,6 +63,7 @@ export const DISBURSEMENT_CATEGORIES: readonly DisbursementCategory[] = [
   "accountsPayable",
   "apEstimate",
   "bonusAccruals",
+  "taxes",
 ];
 
 export function directionOf(category: CashCategory): Direction {
@@ -239,6 +241,40 @@ export interface Accrual {
   payouts?: Array<{ date: ISODate; amount: number }>;
 }
 
+/**
+ * Quarterly estimated income taxes, derived from monthly operating profit.
+ *
+ * The profit figures come from the `Brains Projections 2026` sheet ("Projected
+ * Operating Profit" on the Summary block) — the same row that feeds the
+ * financial model's Net Operating Income. The tool never recomputes profit; it
+ * consumes that number and turns it into dated cash out, which is the one
+ * translation the cash-flow tool owns.
+ */
+export interface TaxSettings {
+  /** Off → the engine emits no tax disbursements at all. */
+  enabled: boolean;
+  /**
+   * Blended effective tax rate applied to year-to-date operating profit
+   * (0..1). Defaults to 0.35, matching the financial model's
+   * "Federal Estimated Taxes (35%)" row.
+   */
+  rate: number;
+  /**
+   * Operating profit per calendar month, keyed "YYYY-MM". Synced from the
+   * projections sheet; an entry written here by hand supersedes the synced
+   * value for that month (see `monthlyProfitOverrides` in the store merge).
+   */
+  monthlyProfit?: Record<string, number>;
+  /**
+   * Estimated payments already made. Any installment whose due date falls on
+   * or before this leaves the forecast — its cash is already baked into the
+   * starting bank balance. Same guardrail as `payrollPaidThrough`.
+   */
+  paidThrough?: ISODate;
+}
+
+export const DEFAULT_TAX_RATE = 0.35;
+
 /** How the rolling horizon is shaped: N weekly periods, then M monthly. */
 export interface HorizonConfig {
   /** Number of weekly periods from the anchor (sheet uses ≥13). */
@@ -328,6 +364,13 @@ export interface ForecastInput {
    */
   includeBudgeted?: boolean;
   accruals?: Accrual[];
+  /**
+   * Quarterly estimated taxes. When `enabled`, the store expands this into
+   * `taxes` disbursements on the IRS due dates (see `taxInstallments`). The
+   * pure engine ignores this field — expansion happens in the client store,
+   * like the staff roster.
+   */
+  taxes?: TaxSettings;
   horizon?: HorizonConfig;
   settings?: ForecastSettings;
 }

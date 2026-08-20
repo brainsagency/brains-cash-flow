@@ -64,6 +64,19 @@ create table if not exists public.bank_last_sync (
   accounts jsonb not null default '[]'
 );
 
+-- Last successful read of the projections sheet (single row): monthly
+-- operating profit that drives the quarterly estimated-tax schedule.
+create table if not exists public.projections_last_sync (
+  id text primary key default 'default',
+  synced_at timestamptz not null,
+  spreadsheet_id text not null,
+  tab_title text not null,
+  matched_label text not null,
+  year int not null,
+  monthly_profit jsonb not null default '{}',
+  missing_months jsonb not null default '[]'
+);
+
 -- Shared app workspace (single document): the manual forecast layer,
 -- scenarios, and per-bill AP adjustments — so the whole team sees the same
 -- assumptions instead of per-browser localStorage. Last write wins.
@@ -94,5 +107,6 @@ alter table public.qbo_last_sync enable row level security;
 alter table public.bill_last_sync enable row level security;
 alter table public.plaid_connection enable row level security;
 alter table public.bank_last_sync enable row level security;
+alter table public.projections_last_sync enable row level security;
 alter table public.app_state enable row level security;
 alter table public.sync_log enable row level security;
