@@ -27,6 +27,7 @@ import {
 import {
   addDays,
   isValidISODate,
+  DEFAULT_TAX_RATE,
   staffToPayroll,
   taxEvents,
   terminationFinalPay,
@@ -619,11 +620,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Taxes: fold the synced projections sheet under any hand-entered monthly
   // profit (a typed figure always beats the sheet, so a known correction isn't
   // clobbered by the next nightly sync), then expand the result into quarterly
-  // `taxes` disbursements on the IRS due dates. Off by default — no tax
-  // settings, or `enabled: false`, means no tax events at all.
+  // `taxes` disbursements on the IRS due dates.
+  //
+  // The merge happens even when taxes are switched OFF, so the panel can show
+  // what the sheet says and what it *would* cost before you commit to it —
+  // short-circuiting here left a freshly-synced workspace looking empty, since
+  // a workspace saved before this feature has no `taxes` key at all. Only the
+  // cash events are gated on `enabled`.
   const taxBase = useMemo<ForecastInput>(() => {
-    const settings = staffBase.taxes;
-    if (!settings?.enabled) return staffBase;
+    const settings = staffBase.taxes ?? { enabled: false, rate: DEFAULT_TAX_RATE };
     const merged = {
       ...settings,
       monthlyProfit: { ...projections.monthlyProfit, ...(settings.monthlyProfit ?? {}) },
