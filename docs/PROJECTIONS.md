@@ -109,9 +109,34 @@ That is the difference between tracking payments and just flagging them paid.
 
 The schedule shows the whole chain per quarter: profit for that period alone,
 the liability it added (negative when the quarter lost money), the running
-liability YTD, what had been applied before it, the payment, and the balance
-still owed after it. A year summary strip sits above with liability accrued to
-date, projected full-year, paid so far, scheduled ahead, and still to fund.
+liability YTD, what had been applied before it, the payment, and what is still
+owed after it.
+
+Row status distinguishes three different kinds of zero, which is easy to
+conflate: **Skipped** (you recorded $0 and liability is still outstanding),
+**Unpaid** (owed with nothing scheduled), and **Nothing owed** (payments already
+cover what has accrued).
+
+### Skipping instalments, and the overshoot warning
+
+Because every instalment is a catch-up on the year so far, skipping the early
+ones does not reduce what you pay — it concentrates it into the next one. That
+matters in a year that turns down: the catch-up is sized on profit earned *to
+that point*, so if the rest of the year loses money you can end up scheduling
+far more than the year actually owes.
+
+The summary strip flags this as **"paying as scheduled overshoots the year by
+$X"**. The 2026 case is exactly this shape: nothing paid in Q1 or Q2, so the
+15 Sep instalment is $67,841.74, while the full year is projected to owe only
+$8,114.65 — a $59,727.10 overshoot that would sit with the IRS until filing.
+
+The fix is to record a smaller **planned** amount on that row. Note that
+skipping quarterly instalments can carry an underpayment penalty even when the
+year nets out, so this is a question for the accountant, not just a cash call.
+
+Liability **accrued to date** counts every calendar month that has fully
+elapsed, not the last closed quarter — quarter-based accrual runs up to three
+months stale and reads as broken when it exceeds the full-year figure.
 
 ### Other controls
 

@@ -329,43 +329,73 @@ describe("recorded payments", () => {
 });
 
 describe("year summary", () => {
-  it("counts liability only through periods that have actually closed", () => {
-    // 20 Aug: Q1 and Q2 have closed (Mar 31, May 31); Q3 ends Aug 31.
-    const [s] = taxYearSummaries(taxInstallments(base), "2026-08-20");
-    expect(s!.liabilityToDate).toBe(99_845.2);
-    expect(s!.liabilityFullYear).toBe(15_989.4);
+  it("accrues through the last COMPLETE MONTH, not the last closed quarter", () => {
+    // 20 Aug: quarter-based accrual would report through 31 May and overstate.
+    const [s] = taxYearSummaries(base, "2026-08-20");
+    expect(s!.accruedThroughMonth).toBe("2026-07");
+    // Jan–Jul profit = 177,286 → ×0.35
+    expect(s!.liabilityAccrued).toBeCloseTo(62_050.1, 2);
   });
 
-  it("picks up a period the moment it closes", () => {
-    const [s] = taxYearSummaries(taxInstallments(base), "2026-08-31");
-    expect(s!.liabilityToDate).toBe(75_716.55); // Q3 now closed
+  it("moves on as each month completes", () => {
+    expect(taxYearSummaries(base, "2026-08-31")[0]!.accruedThroughMonth).toBe("2026-08");
+    expect(taxYearSummaries(base, "2026-09-01")[0]!.accruedThroughMonth).toBe("2026-08");
+  });
+
+  it("never reports a negative accrual in a loss-making year", () => {
+    const losses: TaxSettings = {
+      enabled: true,
+      rate: 0.35,
+      monthlyProfit: { "2026-01": -50_000, "2026-02": -50_000 },
+    };
+    expect(taxYearSummaries(losses, "2026-06-01")[0]!.liabilityAccrued).toBe(0);
   });
 
   it("splits paid from still-to-fund", () => {
     const [s] = taxYearSummaries(
-      taxInstallments({ ...base, payments: { "2026-Q1": { amount: 50_771, paid: true } } }),
+      { ...base, payments: { "2026-Q1": { amount: 50_771, paid: true } } },
       "2026-08-20",
     );
     expect(s!.paidToDate).toBe(50_771);
     expect(s!.scheduledAhead).toBeCloseTo(49_074.2, 3);
-    // Overpaid for the year, because the year ends in a loss.
-    expect(s!.outstanding).toBeCloseTo(15_989.4 - 50_771, 3);
   });
 
-  it("prices a fractional overpayment through to the next quarter", () => {
-    // Paying 18.9c more than Q1 owed leaves Q2 exactly that much lighter.
-    const rows = taxInstallments({
+  it("flags how far paying the schedule would overshoot the year", () => {
+    // Skip Q1 and Q2 entirely: the Q3 catch-up is sized on profit through Aug,
+    // but the year finishes far lower, so paying it overshoots.
+    const skipped: TaxSettings = {
       ...base,
-      payments: { "2026-Q1": { amount: 50_771.189, paid: true } },
-    });
-    expect(rows[1]!.amount).toBeCloseTo(49_074.011, 3);
+      payments: {
+        "2026-Q1": { amount: 0, paid: false },
+        "2026-Q2": { amount: 0, paid: false },
+      },
+    };
+    const [s] = taxYearSummaries(skipped, "2026-08-20");
+    expect(s!.scheduledAhead).toBe(75_716.55); // the Q3 catch-up
+    expect(s!.liabilityFullYear).toBe(15_989.4);
+    expect(s!.overpaymentIfPaidAsScheduled).toBeCloseTo(59_727.15, 2);
+  });
+
+  it("reports no overshoot when the schedule matches the year", () => {
+    const [s] = taxYearSummaries(
+      { ...base, monthlyProfit: { "2026-01": 30_000, "2026-02": 30_000, "2026-03": 30_000 } },
+      "2026-01-01",
+    );
+    expect(s!.overpaymentIfPaidAsScheduled).toBe(0);
+  });
+
+  it("points at the next installment that actually moves cash", () => {
+    const [s] = taxYearSummaries(base, "2026-05-01");
+    expect(s!.next).toMatchObject({ id: "2026-Q2", date: "2026-06-15" });
+    // Q1 is in the past, and Q3/Q4 are $0, so after June there is nothing left.
+    expect(taxYearSummaries(base, "2026-07-01")[0]!.next).toBeNull();
   });
 
   it("summarises each year separately", () => {
-    const two = taxInstallments({
+    const two: TaxSettings = {
       ...base,
       monthlyProfit: { ...PROFIT_2026, "2027-01": 100_000 },
-    });
+    };
     expect(taxYearSummaries(two, "2026-08-20").map((s) => s.year)).toEqual([2026, 2027]);
   });
 });

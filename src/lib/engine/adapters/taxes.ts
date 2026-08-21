@@ -239,16 +239,32 @@ export function taxInstallments(settings: TaxSettings): TaxInstallment[] {
 /** Year-level totals for the summary strip. */
 export interface TaxYearSummary {
   year: number;
-  /** Liability accrued through the last period that has actually closed. */
-  liabilityToDate: number;
+  /** Last complete calendar month counted, "YYYY-MM". */
+  accruedThroughMonth: string | null;
+  /**
+   * Liability accrued through the last COMPLETE MONTH — not the last closed
+   * quarter. Quarter-based accrual is up to three months stale, which reads as
+   * broken when it exceeds the full-year figure.
+   */
+  liabilityAccrued: number;
   /** Full-year liability on current projections. */
   liabilityFullYear: number;
   /** Sum of installments recorded as paid. */
   paidToDate: number;
-  /** Sum of unpaid installments still ahead. */
+  /** Sum of unpaid installments still to leave the bank. */
   scheduledAhead: number;
-  /** liabilityFullYear − paidToDate. What is still to fund. */
-  outstanding: number;
+  /**
+   * How far paying the schedule as it stands would overshoot the year's
+   * liability: (paid + scheduled) − full year, floored at zero.
+   *
+   * This is the number that matters when payments have been skipped early in a
+   * loss-making year. The catch-up installment is computed on profit to that
+   * point, but if the rest of the year loses money the excess is not owed —
+   * it just sits with the IRS until filing.
+   */
+  overpaymentIfPaidAsScheduled: number;
+  /** The next installment that will actually move cash, if any. */
+  next: { id: string; label: string; date: ISODate; amount: number } | null;
 }
 
 /**
@@ -257,25 +273,43 @@ export interface TaxYearSummary {
  * `asOf` is passed in rather than read from a clock so this stays pure and
  * testable, like the rest of the engine.
  */
-export function taxYearSummaries(
-  installments: TaxInstallment[],
-  asOf: ISODate,
-): TaxYearSummary[] {
+export function taxYearSummaries(settings: TaxSettings, asOf: ISODate): TaxYearSummary[] {
+  const installments = taxInstallments(settings);
+  const monthlyProfit = settings.monthlyProfit ?? {};
+  const rate = Number.isFinite(settings.rate) ? settings.rate : DEFAULT_TAX_RATE;
   const years = [...new Set(installments.map((i) => i.year))].sort((a, b) => a - b);
+
   return years.map((year) => {
     const rows = installments.filter((i) => i.year === year);
-    // "To date" = the latest period that has actually finished. A period still
-    // in progress has an incomplete profit figure, so counting it would overstate.
-    const closed = rows.filter((i) => i.periodEnd <= asOf);
     const last = rows[rows.length - 1]!;
+
+    // Accrue month by month, stopping at the last month that has fully elapsed.
+    let accrued = 0;
+    let accruedThroughMonth: string | null = null;
+    for (let m = 1; m <= 12; m++) {
+      if (endOfMonth(year, m) > asOf) break;
+      const v = monthlyProfit[monthKey(year, m)];
+      if (typeof v === "number" && Number.isFinite(v)) accrued = roundMoney(accrued + v);
+      accruedThroughMonth = monthKey(year, m);
+    }
+
     const paidToDate = roundMoney(rows.filter((i) => i.paid).reduce((s, i) => s + i.amount, 0));
+    const unpaid = rows.filter((i) => !i.paid && i.amount > 0);
+    const scheduledAhead = roundMoney(unpaid.reduce((s, i) => s + i.amount, 0));
+    const next = unpaid.find((i) => i.date >= asOf) ?? null;
+
     return {
       year,
-      liabilityToDate: closed.length > 0 ? closed[closed.length - 1]!.ytdLiability : 0,
+      accruedThroughMonth,
+      liabilityAccrued: Math.max(0, roundMoney(accrued * rate)),
       liabilityFullYear: last.ytdLiability,
       paidToDate,
-      scheduledAhead: roundMoney(rows.filter((i) => !i.paid).reduce((s, i) => s + i.amount, 0)),
-      outstanding: roundMoney(last.ytdLiability - paidToDate),
+      scheduledAhead,
+      overpaymentIfPaidAsScheduled: Math.max(
+        0,
+        roundMoney(paidToDate + scheduledAhead - last.ytdLiability),
+      ),
+      next: next ? { id: next.id, label: next.label, date: next.date, amount: next.amount } : null,
     };
   });
 }

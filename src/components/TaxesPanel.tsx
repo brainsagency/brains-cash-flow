@@ -30,6 +30,10 @@ interface ProjectionsStatus {
   missingMonths: string[];
 }
 
+/** "2026-07" -> "Jul '26". */
+const monthLabel = (key: string) =>
+  `${MONTHS[Number(key.slice(5, 7)) - 1]} '${key.slice(2, 4)}`;
+
 /** Panel-wide money format: a tenth of a cent, matching the tax math. */
 const money = (n: number) => fmtMoney(n, { dp: MONEY_DP });
 
@@ -139,7 +143,7 @@ export function TaxesPanel() {
   const upcoming = installments.filter((i) => !i.paid && i.amount > 0 && i.dueDate >= anchor);
   const upcomingTotal = upcoming.reduce((s, i) => s + i.amount, 0);
   const ratePct = (settings.rate ?? DEFAULT_TAX_RATE) * 100;
-  const summaries = taxYearSummaries(installments, todayISO());
+  const summaries = settings.enabled ? taxYearSummaries(settings, todayISO()) : [];
 
   return (
     <div className="grid" style={{ gap: 20 }}>
@@ -300,9 +304,11 @@ export function TaxesPanel() {
           <span className="pill-total mono">{money(upcomingTotal)} ahead</span>
         </div>
         <div className="muted" style={{ marginBottom: 14 }}>
-          Each due date pays <b>(year-to-date profit × rate) − everything already paid this year</b>, floored at zero.
-          A loss later in the year shrinks the next payment rather than generating a refund — which is how estimated
-          taxes actually settle. Note the IRS periods are 3, 2, 3, and 4 months long, not even quarters.
+          Each row reads left to right: what the period earned, the liability that created, the running total for the
+          year, what had been paid before it, and what that leaves to pay. Every installment is a{" "}
+          <b>catch-up on the whole year so far</b> — profit to date × rate, less everything already applied — so a
+          loss-making quarter shrinks the next payment instead of generating a refund. The IRS periods are 3, 2, 3,
+          and 4 months long, not even quarters.
         </div>
 
         {summaries.map((y) => (
@@ -311,27 +317,48 @@ export function TaxesPanel() {
               <b style={{ fontSize: 13 }}>{y.year} liability</b>
             </div>
             <div className="aging">
-              <div className="a" title="Liability accrued through the last estimated-tax period that has closed">
-                Accrued to date
-                <b>{money(y.liabilityToDate)}</b>
+              <div
+                className="a"
+                title="Operating profit × rate, counting every calendar month that has fully elapsed"
+              >
+                Accrued through {y.accruedThroughMonth ? monthLabel(y.accruedThroughMonth) : "—"}
+                <b>{money(y.liabilityAccrued)}</b>
               </div>
-              <div className="a" title="Full-year liability on current projections">
+              <div className="a" title="What the whole year is projected to owe, once H2 is in">
                 Full year (projected)
                 <b>{money(y.liabilityFullYear)}</b>
               </div>
-              <div className="a" title="Sum of installments recorded as paid">
+              <div className="a" title="Installments recorded as actually paid">
                 Paid so far
                 <b>{money(y.paidToDate)}</b>
               </div>
-              <div className="a" title="Unpaid installments still in the forecast">
+              <div className="a" title="Unpaid installments still set to leave the bank">
                 Scheduled ahead
                 <b>{money(y.scheduledAhead)}</b>
               </div>
-              <div className={`a${y.outstanding > 0 ? " danger" : ""}`} title="Full-year liability less what has been paid. Negative means overpaid.">
-                {y.outstanding < 0 ? "Overpaid" : "Still to fund"}
-                <b>{money(Math.abs(y.outstanding))}</b>
-              </div>
+              {y.next && (
+                <div className="a" title="The next installment that moves cash">
+                  Next payment · {fmtShortDate(y.next.date)}
+                  <b>{money(y.next.amount)}</b>
+                </div>
+              )}
             </div>
+
+            {y.overpaymentIfPaidAsScheduled > 0 && (
+              <div className="alert warning" style={{ marginTop: 12, marginBottom: 0 }}>
+                <span className="ico">↩️</span>
+                <span>
+                  <b>
+                    Paying as scheduled overshoots the year by {money(y.overpaymentIfPaidAsScheduled)}.
+                  </b>{" "}
+                  The {y.next ? `${fmtShortDate(y.next.date)} ` : ""}installment is a catch-up on profit earned to
+                  that point, but {y.year} is projected to finish at {money(y.liabilityFullYear)} of liability — the
+                  rest sits with the IRS until you file. You can record a smaller <b>planned</b> amount on that row
+                  instead. Worth checking with Upsourced first: skipping quarterly instalments can carry an
+                  underpayment penalty even when the year nets out.
+                </span>
+              </div>
+            )}
           </div>
         ))}
 
@@ -376,8 +403,8 @@ export function TaxesPanel() {
                     Applied before
                   </th>
                   <th style={{ padding: "6px 8px" }}>Payment</th>
-                  <th style={{ padding: "6px 8px" }} title="Still owed for the year after this installment. Negative = overpaid.">
-                    Balance
+                  <th style={{ padding: "6px 8px" }} title="Liability accrued to this point that has not been paid. Negative = paid ahead.">
+                    Still owed
                   </th>
                   <th style={{ textAlign: "left", padding: "6px 8px" }}>Status</th>
                   <th style={{ padding: "6px 8px" }} />
@@ -567,8 +594,21 @@ function ScheduleRow({
             <span className="chip committed" title={i.payment?.note || "Recorded as paid"}>
               Paid
             </span>
+          ) : i.overridden && i.amount === 0 && i.balance > 0 ? (
+            // A $0 you entered yourself, with liability still outstanding. NOT
+            // the same as owing nothing — that distinction was the confusing bit.
+            <span
+              className="chip danger"
+              title={`You recorded $0 here. ${money(i.balance)} of liability is still unpaid and rolls into the next installment.`}
+            >
+              Skipped
+            </span>
+          ) : i.amount === 0 && i.balance > 0 ? (
+            <span className="chip danger" title="Liability outstanding with nothing scheduled against it">
+              Unpaid
+            </span>
           ) : i.amount === 0 ? (
-            <span className="chip neutral" title="Payments to date already cover the liability accrued so far">
+            <span className="chip neutral" title="Payments applied already cover the liability accrued so far">
               Nothing owed
             </span>
           ) : stale ? (
