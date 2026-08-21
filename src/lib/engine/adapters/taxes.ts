@@ -107,14 +107,15 @@ export interface TaxInstallment {
 }
 
 /**
- * Money is carried to a tenth of a cent. The profit figures arrive from the
- * sheet unrounded (Jan is -21563.570000000065), so rounding the tax to whole
- * dollars threw away real precision and stopped the figures tying back to the
- * source. Three decimal places also clips the float noise that would otherwise
- * surface in the UI.
+ * INTERNAL precision: money is carried to a tenth of a cent. The profit figures
+ * arrive from the sheet unrounded (Jan is -21563.570000000065), so rounding to
+ * whole dollars threw away real precision and stopped the figures tying back to
+ * the source; three places also clips binary float noise before it can compound
+ * across four instalments.
  *
- * Note this is the *modelled* figure — an actual IRS voucher is paid in whole
- * dollars, so expect a sub-dollar difference against what you really remit.
+ * The UI displays plain dollars and cents, so a printed column can look a
+ * fraction of a cent out. And an actual IRS voucher is remitted in whole
+ * dollars — expect a sub-dollar difference against what you really pay.
  */
 export const MONEY_DP = 3;
 

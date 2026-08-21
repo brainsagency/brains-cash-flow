@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_TAX_RATE,
-  MONEY_DP,
   profitYears,
-  roundMoney,
   taxInstallments,
   taxYearSummaries,
   type TaxInstallment,
@@ -34,8 +32,16 @@ interface ProjectionsStatus {
 const monthLabel = (key: string) =>
   `${MONTHS[Number(key.slice(5, 7)) - 1]} '${key.slice(2, 4)}`;
 
-/** Panel-wide money format: a tenth of a cent, matching the tax math. */
-const money = (n: number) => fmtMoney(n, { dp: MONEY_DP });
+/**
+ * Panel-wide money format: plain dollars and cents. The tax math still carries
+ * a tenth of a cent internally (see `roundMoney`) so nothing is lost in the
+ * running totals — this is display only, and a column may therefore look a
+ * fraction of a cent off when read as printed.
+ */
+const money = (n: number) => fmtMoney(n, { cents: true });
+
+/** Clip a value to cents for display in an editable field. */
+const toCents = (n: number) => Math.round(n * 100) / 100;
 
 function hoursAgo(iso: string): string {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
@@ -506,8 +512,8 @@ export function TaxesPanel() {
                         <span className="prefix">$</span>
                         <input
                           type="number"
-                          value={typeof value === "number" ? roundMoney(value) : ""}
-                          step="0.001"
+                          value={typeof value === "number" ? toCents(value) : ""}
+                          step="0.01"
                           placeholder="—"
                           onChange={(e) =>
                             setOverride(key, e.target.value === "" ? null : Number(e.target.value))
@@ -554,7 +560,7 @@ function ScheduleRow({
   // the schedule currently says rather than a stale edit.
   useEffect(() => {
     if (editing) {
-      setAmount(i.amount);
+      setAmount(toCents(i.amount));
       setDate(i.date);
       setPaid(i.paid);
       setNote(i.payment?.note ?? "");
@@ -643,7 +649,7 @@ function ScheduleRow({
               >
                 <div className="field">
                   <label>Amount</label>
-                  <MoneyInput value={amount} onChange={setAmount} step="0.001" />
+                  <MoneyInput value={amount} onChange={setAmount} step="0.01" />
                 </div>
                 <div className="field">
                   <label>Date</label>

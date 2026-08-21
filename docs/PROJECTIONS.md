@@ -134,6 +134,10 @@ The fix is to record a smaller **planned** amount on that row. Note that
 skipping quarterly instalments can carry an underpayment penalty even when the
 year nets out, so this is a question for the accountant, not just a cash call.
 
+Figures display in dollars and cents. The maths carries a tenth of a cent
+internally so nothing is lost across the running totals, which means a column
+can read a fraction of a cent out when added up as printed.
+
 Liability **accrued to date** counts every calendar month that has fully
 elapsed, not the last closed quarter — quarter-based accrual runs up to three
 months stale and reads as broken when it exceeds the full-year figure.
