@@ -26,6 +26,7 @@ interface ProjectionsStatus {
   year: number | null;
   monthCount: number;
   missingMonths: string[];
+  components?: Array<{ label: string; kind: "profit" | "adjustment"; total: number }>;
 }
 
 /** "2026-07" -> "Jul '26". */
@@ -173,10 +174,39 @@ export function TaxesPanel() {
         </div>
 
         <div className="muted" style={{ marginBottom: 12 }}>
-          Monthly operating profit is read from the <b>Brains Projections</b> sheet — the same{" "}
-          <b>Projected Operating Profit</b> row that feeds the financial model. The cash-flow tool never recomputes
-          profit; it turns that number into dated cash out.
+          The tax base is read from the <b>Brains Projections</b> sheet, never recomputed here. Rows are combined{" "}
+          <b>using the sign as written in the sheet</b> — the expense rows are already negative, so folding them in
+          reduces the base.
         </div>
+
+        {(status?.components?.length ?? 0) > 0 && (
+          <div className="amex-section" style={{ marginBottom: 14 }}>
+            <div className="row" style={{ marginBottom: 8 }}>
+              <b style={{ fontSize: 13 }}>How the tax base is built</b>
+            </div>
+            {status!.components!.map((c) => (
+              <div className="spec-row" key={c.label}>
+                <span className="label">
+                  {c.kind === "adjustment" ? "＋ " : ""}
+                  {c.label}
+                  <span className="meta">{c.kind === "profit" ? "starting row" : "folded in"}</span>
+                </span>
+                <span className="val mono" style={c.total < 0 ? { color: "var(--red)" } : undefined}>
+                  {money(c.total)}
+                </span>
+              </div>
+            ))}
+            <div className="spec-row" style={{ borderTop: "1px solid var(--border-strong)" }}>
+              <span className="label">
+                <b>Tax base</b>
+                <span className="meta">{status!.year} total · the rate is applied to this</span>
+              </span>
+              <span className="val mono">
+                <b>{money(status!.components!.reduce((s, c) => s + c.total, 0))}</b>
+              </span>
+            </div>
+          </div>
+        )}
 
         {status?.configured && status.tabTitle && (
           <>
@@ -444,7 +474,7 @@ export function TaxesPanel() {
       <div className="card">
         <div className="row" style={{ marginBottom: 6 }}>
           <h2 style={{ margin: 0, textTransform: "none", fontSize: 15, color: "var(--text)" }}>
-            Monthly operating profit
+            Monthly tax base
           </h2>
           <div className="spacer" />
           {overrideCount > 0 && (
@@ -468,7 +498,7 @@ export function TaxesPanel() {
           )}
         </div>
         <div className="muted" style={{ marginBottom: 4 }}>
-          Straight from the sheet. Type over any month to correct it — a typed value wins over the sheet and survives
+          The profit row with the adjustments above already folded in. Type over any month to correct it — a typed value wins over the sheet and survives
           the nightly sync, so a known adjustment isn&apos;t clobbered. Clear the field to go back to the synced figure.
         </div>
 

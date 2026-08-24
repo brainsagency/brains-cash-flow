@@ -68,8 +68,14 @@ export interface ProjectionsSyncResult {
   spreadsheetId: string;
   /** Tab actually read (resolved from config or by year). */
   tabTitle: string;
-  /** Row label matched, as written in the sheet. */
+  /** Profit row label matched, as written in the sheet. */
   matchedLabel: string;
+  /**
+   * The rows behind `monthlyProfit`, so the panel can show the derivation
+   * rather than presenting an opaque number: the profit row first, then each
+   * adjustment folded in.
+   */
+  components?: Array<{ label: string; kind: "profit" | "adjustment"; monthly: Record<string, number>; total: number }>;
   /** Calendar year the figures were keyed to. */
   year: number;
   /** Operating profit keyed "YYYY-MM". */
@@ -314,6 +320,7 @@ async function sbSaveProjectionsSync(r: ProjectionsSyncResult): Promise<void> {
     spreadsheet_id: r.spreadsheetId,
     tab_title: r.tabTitle,
     matched_label: r.matchedLabel,
+    components: r.components ?? [],
     year: r.year,
     monthly_profit: r.monthlyProfit,
     missing_months: r.missingMonths,
@@ -334,6 +341,7 @@ async function sbGetLastProjectionsSync(): Promise<ProjectionsSyncResult | null>
     spreadsheetId: data.spreadsheet_id as string,
     tabTitle: data.tab_title as string,
     matchedLabel: data.matched_label as string,
+    components: (data.components ?? []) as ProjectionsSyncResult["components"],
     year: Number(data.year),
     monthlyProfit: (data.monthly_profit ?? {}) as Record<string, number>,
     missingMonths: (data.missing_months ?? []) as string[],

@@ -9,9 +9,10 @@ import {
   sheetsConfigFromEnv,
 } from "@/lib/integrations/sheets/client.js";
 import {
+  DEFAULT_ADJUSTMENT_LABELS,
   DEFAULT_PROFIT_LABEL,
   ProfitRowNotFoundError,
-  parseMonthlyProfit,
+  parseTaxBase,
   yearFromTabTitle,
 } from "@/lib/integrations/sheets/map.js";
 import { appendLog, saveProjectionsSync } from "@/lib/integrations/store.js";
@@ -56,6 +57,12 @@ async function runProjectionsSync() {
   // config wins; otherwise follow the calendar, so January needs no touch-up.
   const targetYear = Number(process.env.PROJECTIONS_YEAR) || new Date().getUTCFullYear();
   const label = process.env.PROJECTIONS_PROFIT_LABEL || DEFAULT_PROFIT_LABEL;
+  // Rows folded into the tax base on top of the profit row. Comma-separated;
+  // set to an empty string to tax the profit row alone.
+  const adjustmentLabels =
+    process.env.PROJECTIONS_ADJUSTMENT_LABELS === undefined
+      ? DEFAULT_ADJUSTMENT_LABELS
+      : process.env.PROJECTIONS_ADJUSTMENT_LABELS.split(",");
 
   try {
     const token = await getAccessToken(cfg);
@@ -69,16 +76,25 @@ async function runProjectionsSync() {
     // A tab named for its year is more trustworthy than the calendar — reading
     // the "2026" tab in January 2027 should still key months to 2026.
     const year = yearFromTabTitle(tab.title) ?? targetYear;
-    const parsed = parseMonthlyProfit(grid, { label, year });
+    const parsed = parseTaxBase(grid, { profitLabel: label, adjustmentLabels, year });
 
     const result = {
       syncedAt: new Date().toISOString(),
       spreadsheetId: cfg.spreadsheetId,
       tabTitle: tab.title,
-      matchedLabel: parsed.matchedLabel,
+      matchedLabel: parsed.profit.label,
       year,
-      monthlyProfit: parsed.monthlyProfit,
-      missingMonths: parsed.missingMonths,
+      monthlyProfit: parsed.taxBase,
+      missingMonths: parsed.profit.missingMonths,
+      components: [
+        { label: parsed.profit.label, kind: "profit" as const, monthly: parsed.profit.monthly, total: parsed.profit.total },
+        ...parsed.adjustments.map((a) => ({
+          label: a.label,
+          kind: "adjustment" as const,
+          monthly: a.monthly,
+          total: a.total,
+        })),
+      ],
     };
     await saveProjectionsSync(result);
     await appendLog({
@@ -87,18 +103,21 @@ async function runProjectionsSync() {
       finishedAt: result.syncedAt,
       status: "ok",
       message:
-        `${tab.title} · "${parsed.matchedLabel}" · ${Object.keys(parsed.monthlyProfit).length}/12 months` +
-        (parsed.missingMonths.length > 0 ? ` · missing ${parsed.missingMonths.join(", ")}` : ""),
+        `${tab.title} · "${parsed.profit.label}"` +
+        parsed.adjustments.map((a) => ` less "${a.label}"`).join("") +
+        ` · ${Object.keys(parsed.taxBase).length}/12 months` +
+        (parsed.profit.missingMonths.length > 0 ? ` · missing ${parsed.profit.missingMonths.join(", ")}` : ""),
     });
 
     return NextResponse.json({
       ok: true,
       syncedAt: result.syncedAt,
       tabTitle: tab.title,
-      matchedLabel: parsed.matchedLabel,
+      matchedLabel: parsed.profit.label,
+      adjustments: parsed.adjustments.map((a) => ({ label: a.label, total: a.total })),
       year,
-      monthCount: Object.keys(parsed.monthlyProfit).length,
-      missingMonths: parsed.missingMonths,
+      monthCount: Object.keys(parsed.taxBase).length,
+      missingMonths: parsed.profit.missingMonths,
     });
   } catch (e) {
     const message = (e as Error).message;

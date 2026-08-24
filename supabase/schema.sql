@@ -74,8 +74,12 @@ create table if not exists public.projections_last_sync (
   matched_label text not null,
   year int not null,
   monthly_profit jsonb not null default '{}',
-  missing_months jsonb not null default '[]'
+  missing_months jsonb not null default '[]',
+  -- The rows behind monthly_profit (profit row + each adjustment), so the UI
+  -- can show how the tax base was derived instead of an opaque figure.
+  components jsonb not null default '[]'
 );
+alter table public.projections_last_sync add column if not exists components jsonb not null default '[]';
 
 -- Shared app workspace (single document): the manual forecast layer,
 -- scenarios, and per-bill AP adjustments — so the whole team sees the same

@@ -17,8 +17,8 @@ reads one row.
 | --- | --- |
 | Spreadsheet | [Brains Projections 2026](https://docs.google.com/spreadsheets/d/1_VPc5YpGnZXLjfP6EvJ0CEuZhfnaGWYmAg61CsHsNIM/edit) |
 | Tab | the one whose title contains the target year (override with `PROJECTIONS_SHEET_TAB`) |
-| Row | `Projected Operating Profit` on the Summary block |
-| Columns | the Jan–Dec header nearest above that row |
+| Rows | `Projected Operating Profit`, less `Other Expenses without billables` |
+| Columns | the Jan–Dec header nearest above each row |
 
 The row is found **by its label, never by cell address**. The Summary block sits
 below every retainer, project, and production line, so it moves down the sheet
@@ -65,6 +65,36 @@ Optional:
 | `PROJECTIONS_SHEET_TAB` | pick the tab whose title contains the year |
 | `PROJECTIONS_YEAR` | the current calendar year |
 | `PROJECTIONS_PROFIT_LABEL` | `Projected Operating Profit` |
+| `PROJECTIONS_ADJUSTMENT_LABELS` | `Other Expenses without billables` (comma-separated; empty string = profit row alone) |
+
+## The tax base
+
+The rate is not applied to the profit row alone. The base is:
+
+```
+Projected Operating Profit          (revenue less breakeven expenses and freelance)
+  + Other Expenses without billables  (depreciation, bad debt, partner buyouts, interest)
+  = tax base
+```
+
+Rows are combined **using the sign as written in the sheet, never negated**.
+The expense rows are already stored negative (January is `-26,709`), so adding
+them reduces the base — which is what "subtract Other Expenses" means in
+practice. Negating instead would turn a $145,589 deduction into a $145,589
+addition and roughly double the tax, so it is asserted in the tests rather than
+left to inference. The Taxes panel shows the derivation with each row's annual
+total, so the sign is visible rather than assumed.
+
+`Cash (Have to) Expenses` is deliberately **not** folded in, even though it is
+the larger row (−$493,565/yr). It holds partner distributions, SBA LOC
+principal, Brandy and retired-partner payments — a distribution of profit is not
+an expense against it, and loan principal is not deductible. Including it would
+understate taxable income in any profitable year. Change
+`PROJECTIONS_ADJUSTMENT_LABELS` if the accountant says otherwise.
+
+A configured row that cannot be found is a **hard failure**, not a silent
+skip — quietly taxing gross profit because someone renamed a row is exactly
+what the label-driven lookup exists to prevent.
 
 ## How the tax number is worked out
 

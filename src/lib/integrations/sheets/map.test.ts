@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_ADJUSTMENT_LABELS,
   DEFAULT_PROFIT_LABEL,
+  parseTaxBase,
   ProfitRowNotFoundError,
   monthColumnsInRow,
   monthOfHeaderCell,
@@ -50,6 +52,14 @@ function projectionsGrid(): unknown[][] {
     dataRow("Projected Operating Profit", [
       -21_564, 14_798, 151_826, 57_876, 82_336, -71_621,
       -36_365, 39_047, 28_168, -34_803, -21_332, -142_682,
+    ]),
+    dataRow("Other Expenses without billables", [
+      -26_709, -10_160, -3_391, -11_721, -7_505, -20_049,
+      -11_009, -11_009, -11_009, -11_009, -11_009, -11_009,
+    ]),
+    dataRow("Cash (Have to) Expenses", [
+      -33_442, -51_693, -51_693, -51_693, -51_693, -36_193,
+      -36_193, -36_193, -36_193, -36_193, -36_193, -36_193,
     ]),
     dataRow("Cash Net Income", Array(12).fill(-65_022)),
   ];
@@ -211,5 +221,79 @@ describe("yearFromTabTitle", () => {
   it("returns null when there is no year", () => {
     expect(yearFromTabTitle("Summary")).toBeNull();
     expect(yearFromTabTitle("")).toBeNull();
+  });
+});
+
+describe("parseTaxBase", () => {
+  it("defaults to folding in the deductible below-the-line expenses", () => {
+    expect(DEFAULT_ADJUSTMENT_LABELS).toEqual(["Other Expenses without billables"]);
+  });
+
+  it("REDUCES the base with a row the sheet stores as negative", () => {
+    // The single most invertible thing here: these rows are already negative,
+    // so they are ADDED, not negated. Negating would turn a $145k deduction
+    // into a $145k addition and silently double the tax.
+    const { taxBase, profit, adjustments } = parseTaxBase(projectionsGrid(), { year: 2026 });
+    expect(profit.monthly["2026-01"]).toBe(-21_564);
+    expect(adjustments[0]!.monthly["2026-01"]).toBe(-26_709);
+    expect(taxBase["2026-01"]).toBe(-48_273); // -21,564 + -26,709
+    expect(taxBase["2026-03"]).toBe(148_435); // 151,826 + -3,391
+  });
+
+  it("lowers the annual base by exactly the adjustment total", () => {
+    const { taxBase, profit, adjustments } = parseTaxBase(projectionsGrid(), { year: 2026 });
+    const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+    expect(adjustments[0]!.total).toBe(-145_589);
+    expect(sum(taxBase)).toBeCloseTo(profit.total - 145_589, 6);
+  });
+
+  it("taxes the profit row alone when no adjustments are configured", () => {
+    const { taxBase, adjustments } = parseTaxBase(projectionsGrid(), {
+      year: 2026,
+      adjustmentLabels: [],
+    });
+    expect(adjustments).toEqual([]);
+    expect(taxBase["2026-01"]).toBe(-21_564);
+  });
+
+  it("folds in several rows at once", () => {
+    const { taxBase, adjustments } = parseTaxBase(projectionsGrid(), {
+      year: 2026,
+      adjustmentLabels: ["Other Expenses without billables", "Cash (Have to) Expenses"],
+    });
+    expect(adjustments).toHaveLength(2);
+    expect(taxBase["2026-01"]).toBe(-81_715); // -21,564 - 26,709 - 33,442
+  });
+
+  it("ignores blank entries from a trailing comma in the env var", () => {
+    const { adjustments } = parseTaxBase(projectionsGrid(), {
+      year: 2026,
+      adjustmentLabels: "Other Expenses without billables, ,".split(","),
+    });
+    expect(adjustments).toHaveLength(1);
+  });
+
+  it("trims whitespace around configured labels", () => {
+    const { adjustments } = parseTaxBase(projectionsGrid(), {
+      year: 2026,
+      adjustmentLabels: ["  Other Expenses without billables  "],
+    });
+    expect(adjustments[0]!.label).toBe("Other Expenses without billables");
+  });
+
+  it("fails loudly when an adjustment row is renamed away", () => {
+    // Silently taxing gross profit because a row moved is the exact failure
+    // the label-driven lookup exists to prevent.
+    expect(() =>
+      parseTaxBase(projectionsGrid(), { year: 2026, adjustmentLabels: ["Nonexistent Row"] }),
+    ).toThrow(ProfitRowNotFoundError);
+  });
+
+  it("only keeps months the profit row has", () => {
+    const grid = projectionsGrid();
+    const profitRow = grid.find((r) => r[2] === "Projected Operating Profit")!;
+    profitRow[8 + 11] = ""; // blank December on the profit row only
+    const { taxBase } = parseTaxBase(grid, { year: 2026 });
+    expect(taxBase["2026-12"]).toBeUndefined();
   });
 });

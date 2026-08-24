@@ -106,6 +106,16 @@ export interface ProjectionsFeed {
   year: number | null;
   monthlyProfit: Record<string, number>;
   missingMonths: string[];
+  /** How the tax base was derived: the profit row, then each adjustment. */
+  components: ProjectionComponent[];
+}
+
+/** One sheet row behind the tax base. */
+export interface ProjectionComponent {
+  label: string;
+  kind: "profit" | "adjustment";
+  monthly: Record<string, number>;
+  total: number;
 }
 
 const EMPTY_PROJECTIONS: ProjectionsFeed = {
@@ -115,6 +125,7 @@ const EMPTY_PROJECTIONS: ProjectionsFeed = {
   year: null,
   monthlyProfit: {},
   missingMonths: [],
+  components: [],
 };
 
 interface Store {

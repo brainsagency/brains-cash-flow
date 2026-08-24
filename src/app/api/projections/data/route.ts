@@ -19,6 +19,7 @@ export async function GET() {
       year: last?.year ?? null,
       monthlyProfit: last?.monthlyProfit ?? {},
       missingMonths: last?.missingMonths ?? [],
+      components: last?.components ?? [],
     });
   } catch {
     return NextResponse.json({
@@ -28,6 +29,7 @@ export async function GET() {
       year: null,
       monthlyProfit: {},
       missingMonths: [],
+      components: [],
     });
   }
 }

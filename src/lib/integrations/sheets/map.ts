@@ -16,8 +16,19 @@ const MONTH_ABBREVS = [
   "jul", "aug", "sep", "oct", "nov", "dec",
 ] as const;
 
-/** The Summary row the tax calculation reads. */
+/** The Summary row the tax calculation starts from. */
 export const DEFAULT_PROFIT_LABEL = "Projected Operating Profit";
+
+/**
+ * Rows folded into the tax base on top of the profit row.
+ *
+ * Default is the below-the-line expenses that are genuinely deductible —
+ * depreciation, bad debt, partner buyouts, interest. Deliberately NOT
+ * "Cash (Have to) Expenses": partner distributions are a distribution of
+ * profit rather than an expense against it, and loan principal is not
+ * deductible either, so folding that row in would understate taxable income.
+ */
+export const DEFAULT_ADJUSTMENT_LABELS = ["Other Expenses without billables"];
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -188,6 +199,71 @@ export function parseMonthlyProfit(
 }
 
 /** The 4-digit year in a tab title ("2026 Projections" → 2026), else null. */
+/** One located row of the sheet, with its months resolved. */
+export interface SheetRow {
+  /** The label as actually written in the sheet. */
+  label: string;
+  /** Values keyed "YYYY-MM". Only months with a usable figure. */
+  monthly: Record<string, number>;
+  /** Months the row had no usable value for. */
+  missingMonths: string[];
+  /** Sum across the year — handy for showing the sign at a glance. */
+  total: number;
+}
+
+export interface TaxBaseParse {
+  /** What the tax rate is applied to: profit combined with each adjustment. */
+  taxBase: Record<string, number>;
+  /** The starting profit row. */
+  profit: SheetRow;
+  /** Rows folded in, in configured order. */
+  adjustments: SheetRow[];
+}
+
+function toSheetRow(parsed: ProfitParseResult): SheetRow {
+  return {
+    label: parsed.matchedLabel,
+    monthly: parsed.monthlyProfit,
+    missingMonths: parsed.missingMonths,
+    total: Object.values(parsed.monthlyProfit).reduce((a, b) => a + b, 0),
+  };
+}
+
+/**
+ * Build the tax base: the profit row with each adjustment row folded in.
+ *
+ * Rows are combined **using the sign as written in the sheet**, not negated.
+ * The expense rows here are already stored negative (-26,709 for January), so
+ * adding them reduces the base — which is what "subtract Other Expenses" means
+ * in practice. Negating them instead would silently double the figure back the
+ * other way, turning a $145k deduction into a $145k addition, so this is
+ * asserted in the tests rather than left to inference.
+ *
+ * A missing adjustment row is fatal: quietly taxing the gross profit because a
+ * row got renamed is exactly the failure this whole label-driven lookup exists
+ * to prevent.
+ */
+export function parseTaxBase(
+  grid: unknown[][],
+  {
+    profitLabel = DEFAULT_PROFIT_LABEL,
+    adjustmentLabels = DEFAULT_ADJUSTMENT_LABELS,
+    year,
+  }: { profitLabel?: string; adjustmentLabels?: string[]; year: number },
+): TaxBaseParse {
+  const profit = toSheetRow(parseMonthlyProfit(grid, { label: profitLabel, year }));
+  const adjustments = adjustmentLabels
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((label) => toSheetRow(parseMonthlyProfit(grid, { label, year })));
+
+  const taxBase: Record<string, number> = {};
+  for (const [month, value] of Object.entries(profit.monthly)) {
+    taxBase[month] = adjustments.reduce((sum, a) => sum + (a.monthly[month] ?? 0), value);
+  }
+  return { taxBase, profit, adjustments };
+}
+
 export function yearFromTabTitle(title: string): number | null {
   const match = /(20\d{2})/.exec(title);
   return match ? Number(match[1]) : null;

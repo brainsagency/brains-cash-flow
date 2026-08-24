@@ -27,6 +27,7 @@ export async function GET() {
     syncedAt: last?.syncedAt ?? null,
     tabTitle: last?.tabTitle ?? null,
     matchedLabel: last?.matchedLabel ?? null,
+    components: last?.components ?? [],
     year: last?.year ?? null,
     monthCount: last ? Object.keys(last.monthlyProfit).length : 0,
     missingMonths: last?.missingMonths ?? [],
