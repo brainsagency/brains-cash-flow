@@ -9,8 +9,8 @@ import { MoneyInput } from "@/components/fields.js";
 /**
  * Operating Expenses — recurring costs, company cards (AmEx-style, with a
  * month-by-month actuals grid over a budget), and one-time direct-paid
- * expenses. Styled to the Claude Design mockup; a read/edit toggle keeps a
- * clean read once things are entered.
+ * expenses. Styled to the Claude Design mockup; each section carries its own
+ * read/edit toggle so opening one to fix a number leaves the rest clean.
  *
  * Data model: recurring "operatingExpense" items, "amex"-category items as
  * company cards (with per-month `overrides`), and dated "operatingExpense"
@@ -22,6 +22,9 @@ const OPEX = "operatingExpense" as const;
 const AMEX = "amex" as const;
 const FREELANCE = "freelance" as const;
 const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Sections that can be put in edit mode independently. */
+type Section = "cards" | "freelance" | "recurring" | "oneoff";
 
 function dayOf(startDate: string): number {
   return Number(startDate.slice(8, 10)) || 1;
@@ -91,13 +94,30 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     </button>
   );
 }
+/** Per-section read/edit toggle, sitting beside that section's Add button. */
+function EditButton({ editing, onClick }: { editing: boolean; onClick: () => void }) {
+  return (
+    <button className={`btn sm ${editing ? "primary" : ""}`} onClick={onClick} style={{ flex: "0 0 auto" }}>
+      {editing ? "Done" : "Edit"}
+    </button>
+  );
+}
 
 export function OperatingExpenses() {
   const { input, setInput } = useStore();
   const anchor = input.anchorDate;
   const anchorPrefix = anchor.slice(0, 7);
-  const [editing, setEditing] = useState(false);
+  const [editSections, setEditSections] = useState<Set<Section>>(new Set());
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
+
+  const isEditing = (s: Section) => editSections.has(s);
+  const toggleEdit = (s: Section) =>
+    setEditSections((prev) => {
+      const next = new Set(prev);
+      next.has(s) ? next.delete(s) : next.add(s);
+      return next;
+    });
+  const beginEdit = (s: Section) => setEditSections((prev) => new Set(prev).add(s));
 
   const all = input.recurring ?? [];
   const opex = all.filter((r) => r.category === OPEX);
@@ -107,7 +127,8 @@ export function OperatingExpenses() {
   // Sort by date for the read view only. While editing, keep insertion order so
   // a row doesn't jump to a new position (closing the native date picker) the
   // moment you change its date — that read as "can't edit the date".
-  const oneoffs = editing ? oneoffsAll : [...oneoffsAll].sort((a, b) => a.date.localeCompare(b.date));
+  const oneoffEditing = isEditing("oneoff");
+  const oneoffs = oneoffEditing ? oneoffsAll : [...oneoffsAll].sort((a, b) => a.date.localeCompare(b.date));
 
   const updateItem = (id: string | undefined, patch: Partial<RecurringItem>) =>
     setInput((prev) => ({ ...prev, recurring: (prev.recurring ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
@@ -160,8 +181,9 @@ export function OperatingExpenses() {
   );
 
   // ---- recurring group (Monthly / other) ----
-  const grid = "minmax(0,1fr) 150px 128px" + (editing ? " 34px" : "");
-  const recGroup = (title: string, rows: RecurringItem[], right: string) => (
+  const recGroup = (title: string, rows: RecurringItem[], right: string, editing: boolean) => {
+    const grid = "minmax(0,1fr) 150px 128px" + (editing ? " 34px" : "");
+    return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 4px 8px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -228,21 +250,27 @@ export function OperatingExpenses() {
         </div>
       ))}
     </div>
-  );
+    );
+  };
 
   // ---- card-style budget group (monthly budget + per-month actuals) ----
   // Shared by Company cards (AmEx) and Freelance, which model the same way.
   const cardGroup = (
     items: RecurringItem[],
-    opts: { title: string; subtitle: string; addLabel: string; onAdd: () => void; emptyText: string; itemLabel: string },
-  ) => (
+    opts: { title: string; subtitle: string; addLabel: string; onAdd: () => void; emptyText: string; itemLabel: string; section: Section },
+  ) => {
+    const editing = isEditing(opts.section);
+    return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Eyebrow color="var(--text)">{opts.title}</Eyebrow>
           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{opts.subtitle}</span>
         </div>
-        <AddButton label={opts.addLabel} onClick={opts.onAdd} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <EditButton editing={editing} onClick={() => toggleEdit(opts.section)} />
+          <AddButton label={opts.addLabel} onClick={opts.onAdd} />
+        </div>
       </div>
       {items.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>{opts.emptyText}</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -308,7 +336,10 @@ export function OperatingExpenses() {
         })}
       </div>
     </div>
-  );
+    );
+  };
+
+  const recurringEditing = isEditing("recurring");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -327,25 +358,20 @@ export function OperatingExpenses() {
         {chip("Freelance", money0(freelanceBudget) + "/mo")}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <p style={{ fontSize: 14, color: "#4a4a4a", lineHeight: 1.5, margin: 0, maxWidth: 720 }}>
-          Recurring operating costs only. Payroll lives on the Staff Roster, and anything paid through Bill.com — like
-          rent — or on a card statement belongs to that feed, so nothing is double-counted.
-        </p>
-        <div style={{ flex: 1 }} />
-        <button className={`btn sm ${editing ? "primary" : ""}`} onClick={() => setEditing((v) => !v)} style={{ flex: "0 0 auto" }}>
-          {editing ? "Done editing" : "Edit amounts"}
-        </button>
-      </div>
+      <p style={{ fontSize: 14, color: "#4a4a4a", lineHeight: 1.5, margin: 0, maxWidth: 720 }}>
+        Recurring operating costs only. Payroll lives on the Staff Roster, and anything paid through Bill.com — like
+        rent — or on a card statement belongs to that feed, so nothing is double-counted.
+      </p>
 
       {/* Company cards */}
       {cardGroup(amex, {
         title: "Company cards",
         subtitle: "Budget flows to the forecast; enter actuals as months close",
         addLabel: "Add card",
-        onAdd: () => { setEditing(true); addAmex(); },
+        onAdd: () => { beginEdit("cards"); addAmex(); },
         emptyText: "No cards yet.",
         itemLabel: "Card",
+        section: "cards",
       })}
 
       {/* Freelance — its own line (budget vs. actual, like a card) */}
@@ -353,20 +379,24 @@ export function OperatingExpenses() {
         title: "Freelance",
         subtitle: "Freelance / contractor budget — its own line; enter actuals as months close",
         addLabel: "Add freelance budget",
-        onAdd: () => { setEditing(true); addFreelance(); },
+        onAdd: () => { beginEdit("freelance"); addFreelance(); },
         emptyText: "No freelance budget yet.",
         itemLabel: "Freelance",
+        section: "freelance",
       })}
 
       {/* Recurring expenses */}
       <div style={CARD}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <Eyebrow color="var(--text)">Recurring expenses</Eyebrow>
-          <AddButton label="Add expense" onClick={() => { setEditing(true); addOpex(); }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <EditButton editing={recurringEditing} onClick={() => toggleEdit("recurring")} />
+            <AddButton label="Add expense" onClick={() => { beginEdit("recurring"); addOpex(); }} />
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-          {recGroup("Monthly", monthlyItems, `${money2(monthlySum)} /mo`)}
-          {recGroup("Weekly & other", otherItems, `${money0(otherMo)} /mo`)}
+          {recGroup("Monthly", monthlyItems, `${money2(monthlySum)} /mo`, recurringEditing)}
+          {recGroup("Weekly & other", otherItems, `${money0(otherMo)} /mo`, recurringEditing)}
         </div>
       </div>
 
@@ -377,15 +407,18 @@ export function OperatingExpenses() {
             <Eyebrow color="var(--text)">One-time expenses</Eyebrow>
             {oneoffs.length > 0 && <span style={{ fontSize: 13, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{money0(oneoffTotal)} total</span>}
           </div>
-          <AddButton label="Add one-time" onClick={() => { setEditing(true); addOneoff(); }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <EditButton editing={oneoffEditing} onClick={() => toggleEdit("oneoff")} />
+            <AddButton label="Add one-time" onClick={() => { beginEdit("oneoff"); addOneoff(); }} />
+          </div>
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
           Ad-hoc costs paid directly (a conference, a one-off purchase) that aren&apos;t on a card or in Bill.com.
         </div>
         {oneoffs.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>None scheduled.</div>}
         {oneoffs.map((e) => (
-          <div key={e.id} style={{ display: "grid", gridTemplateColumns: editing ? "minmax(0,1fr) 150px 128px 34px" : "minmax(0,1fr) 128px", alignItems: "center", gap: 14, padding: "12px 4px", borderBottom: "1px solid rgba(19,19,19,0.05)" }}>
-            {editing ? (
+          <div key={e.id} style={{ display: "grid", gridTemplateColumns: oneoffEditing ? "minmax(0,1fr) 150px 128px 34px" : "minmax(0,1fr) 128px", alignItems: "center", gap: 14, padding: "12px 4px", borderBottom: "1px solid rgba(19,19,19,0.05)" }}>
+            {oneoffEditing ? (
               <input value={e.memo ?? ""} placeholder="e.g. SXSW conference" onChange={(ev) => updateEvent(e.id, { memo: ev.target.value })} style={rowNameInput} />
             ) : (
               <div>
@@ -393,13 +426,13 @@ export function OperatingExpenses() {
                 <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>{fmtShortDate(e.date)}</div>
               </div>
             )}
-            {editing && <input type="date" value={e.date} onChange={(ev) => updateEvent(e.id, { date: ev.target.value })} style={boxInput} />}
-            {editing ? (
+            {oneoffEditing && <input type="date" value={e.date} onChange={(ev) => updateEvent(e.id, { date: ev.target.value })} style={boxInput} />}
+            {oneoffEditing ? (
               <MoneyInput value={e.amount} step="0.01" onChange={(n) => updateEvent(e.id, { amount: n })} />
             ) : (
               <div style={{ textAlign: "right", fontSize: 14.5, fontVariantNumeric: "tabular-nums" }}>{money2(e.amount)}</div>
             )}
-            {editing && <button onClick={() => removeEvent(e.id)} title="Remove" style={xBtn}>✕</button>}
+            {oneoffEditing && <button onClick={() => removeEvent(e.id)} title="Remove" style={xBtn}>✕</button>}
           </div>
         ))}
       </div>
