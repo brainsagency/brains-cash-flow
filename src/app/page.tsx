@@ -12,6 +12,7 @@ import { CashFlowCard, type RangeOption } from "@/components/CashFlowCard.js";
 import { CashMatrix } from "@/components/CashMatrix.js";
 import { AlertsPanel } from "@/components/AlertsPanel.js";
 import { NarrativePanel } from "@/components/NarrativePanel.js";
+import { RecentChanges } from "@/components/RecentChanges.js";
 import { OperatingExpenses } from "@/components/OperatingExpenses.js";
 import { StaffRoster } from "@/components/StaffRoster.js";
 import { TaxesPanel } from "@/components/TaxesPanel.js";
@@ -265,6 +266,7 @@ export default function Dashboard() {
         {nav === "insights" && (
           <div className="grid" style={{ gap: 16 }}>
             <KpiCards result={base} />
+            <RecentChanges />
             <div className="grid two-col">
               <NarrativePanel result={base} />
               <AlertsPanel alerts={base.alerts} />

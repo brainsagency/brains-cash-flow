@@ -76,7 +76,8 @@ const LABELS: Record<string, string> = {
   taxes: "estimated taxes",
 };
 
-function humanCategory(key: string): string {
+/** Category key → the plain-English word used in narrative and change bullets. */
+export function humanCategory(key: string): string {
   return LABELS[key] ?? key;
 }
 

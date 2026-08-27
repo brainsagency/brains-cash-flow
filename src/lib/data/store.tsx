@@ -26,6 +26,7 @@ import {
 } from "react";
 import {
   addDays,
+  forecast,
   isValidISODate,
   DEFAULT_TAX_RATE,
   staffToPayroll,
@@ -39,10 +40,24 @@ import {
 import { todayISO } from "@/lib/format.js";
 import { autoApplyBankBalances } from "@/lib/integrations/plaid/apply.js";
 import { gateReimbursementReceipts } from "@/lib/integrations/qbo/reimbursement.js";
+import {
+  captureSnapshot,
+  listSnapshots,
+  metricsOf,
+  type HistoryMode,
+  type SnapshotMeta,
+} from "./history.js";
 import { SEED_INPUT, SEED_SCENARIOS } from "./seed.js";
 
 const STORAGE_KEY = "brains-cashflow-v2";
 const SAVE_DEBOUNCE_MS = 800;
+/**
+ * How long the merged input must sit still before this session records a
+ * history snapshot. Long enough for the overnight AR/AP/projections syncs to
+ * land, so the snapshot captures the state the day actually opened with rather
+ * than a half-loaded workspace.
+ */
+const SNAPSHOT_SETTLE_MS = 6_000;
 
 export interface UiPrefs {
   view: "week" | "month";
@@ -151,6 +166,12 @@ interface Store {
   taxOverrides: Record<string, number>;
   /** Re-read the projections sheet snapshot from the server. */
   refreshProjections: () => Promise<void>;
+  /** Forecast history (newest first) behind Insights → "What's changed". */
+  snapshots: SnapshotMeta[];
+  /** Where that history lives: the shared cloud table or this browser only. */
+  historyMode: HistoryMode;
+  /** Re-read the snapshot index (after a capture, or on demand). */
+  refreshHistory: () => Promise<void>;
   adjustments: Record<string, Adjustment>;
   /** Patch a synced item's adjustment; `date: null` clears the override. */
   setAdjustment: (id: string, patch: { excluded?: boolean; date?: string | null }) => void;
@@ -251,6 +272,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [billSyncedAt, setBillSyncedAt] = useState<string | null>(null);
   const [reimbursedThrough, setReimbursedThrough] = useState<string | null>(null);
   const [projections, setProjections] = useState<ProjectionsFeed>(EMPTY_PROJECTIONS);
+  const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
+  const [historyMode, setHistoryMode] = useState<HistoryMode>("local");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Optimistic-concurrency + reliable-save bookkeeping (all refs so they're
   // current inside async saves and window event handlers without re-rendering).
@@ -258,6 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef<AppState>(state); // latest state for flush-on-hide
   const dirtyRef = useRef(false); // an unsaved cloud change is pending
   const bankAutoAppliedRef = useRef(false); // one-shot Plaid balance apply per load
+  const snapshotTakenRef = useRef(false); // one-shot history capture per session
   const suppressSaveRef = useRef(false); // skip the cloud save for a programmatic adopt
   stateRef.current = state;
 
@@ -699,6 +723,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [taxBase, state.adjustments, syncedAr, syncedAp, reimbursedThrough]);
 
+  const refreshHistory = useCallback(async () => {
+    const { mode, snapshots: list } = await listSnapshots();
+    setHistoryMode(mode);
+    setSnapshots(list);
+  }, []);
+
+  // Record where things stand, once per session, after the merged input has sat
+  // still long enough for the overnight syncs to land. The capture itself is
+  // deduped by window (server-side for the shared history), so several tabs
+  // opening on the same day still produce one snapshot.
+  useEffect(() => {
+    if (!ready || snapshotTakenRef.current) return;
+    const timer = setTimeout(() => {
+      snapshotTakenRef.current = true;
+      void (async () => {
+        const { mode, snapshots: list } = await listSnapshots();
+        setHistoryMode(mode);
+        setSnapshots(list);
+        try {
+          await captureSnapshot(mergedInput, metricsOf(forecast(mergedInput)), mode);
+        } catch {
+          return; // a mid-edit input the engine can't run — try again next load
+        }
+        const after = await listSnapshots();
+        setHistoryMode(after.mode);
+        setSnapshots(after.snapshots);
+      })();
+    }, SNAPSHOT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [ready, mergedInput]);
+
   return (
     <StoreContext.Provider
       value={{
@@ -714,6 +769,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         projections,
         taxOverrides: state.input.taxes?.monthlyProfit ?? {},
         refreshProjections,
+        snapshots,
+        historyMode,
+        refreshHistory,
         adjustments: state.adjustments,
         setAdjustment,
         setInput,

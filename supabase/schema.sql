@@ -114,3 +114,19 @@ alter table public.bank_last_sync enable row level security;
 alter table public.projections_last_sync enable row level security;
 alter table public.app_state enable row level security;
 alter table public.sync_log enable row level security;
+
+-- Forecast history: periodic snapshots of the merged workspace, so Insights can
+-- diff today against a stored point in time ("what's changed recently").
+-- One row per capture window (a day, by default); pruned to a rolling cap by
+-- the capture route. `input` is the full merged ForecastInput as it stood.
+create table if not exists public.forecast_snapshot (
+  id bigint generated always as identity primary key,
+  captured_at timestamptz not null default now(),
+  anchor date not null,
+  input jsonb not null,
+  metrics jsonb not null default '{}'
+);
+create index if not exists forecast_snapshot_captured_at_idx
+  on public.forecast_snapshot (captured_at desc);
+
+alter table public.forecast_snapshot enable row level security;

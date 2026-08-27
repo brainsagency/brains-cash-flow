@@ -37,7 +37,17 @@ export type {
 } from "./scenarios.js";
 export { monthlyRollup } from "./rollup.js";
 export type { MonthlyRow } from "./rollup.js";
-export { narrate } from "./narrative.js";
+export { narrate, humanCategory } from "./narrative.js";
+export { changeHeadline, diffForecasts, digest, narrateChanges, rebaseTo } from "./changes.js";
+export type {
+  CashChange,
+  ChangeKind,
+  ChangeOptions,
+  ChangeReport,
+  ChangeWindow,
+  MetricChange,
+  NarrateChangesOptions,
+} from "./changes.js";
 export { staffToPayroll, terminationFinalPay } from "./adapters/staff.js";
 export type { StaffMember, StaffToPayrollOptions } from "./adapters/staff.js";
 export {
