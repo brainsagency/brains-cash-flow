@@ -514,12 +514,6 @@ table.fc td.neg {
 }
 
 /* Staff roster edit grid: fixed numeric/date columns, scrolls if too narrow. */
-.staff-edit-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1.6fr) 120px 150px 150px 120px 140px 120px auto;
-  gap: 8px;
-  min-width: 880px;
-}
 
 /* Float-style cash matrix */
 table.fc.matrix th,
@@ -1262,25 +1256,27 @@ input.cell-date:disabled {
   color: var(--text);
 }
 
-/* ---- Other Withdrawals & Reimbursements ---------------------------------- */
-/* Master–detail: the list reads as sentences; one panel edits the selected
-   line, and only once you ask for it. Nothing is a form until then. */
-.ow-card {
+/* ---- Split card: a list of lines + a detail editor ----------------------- */
+/* Master–detail, shared by the panels that hold a list of many-field entities
+   (Other Withdrawals, the staff roster). The list reads as sentences; one panel
+   edits the selected line, and only once you ask for it. Nothing is a form
+   until then — which is what a row of eight labelled inputs per item forces. */
+.split-card {
   padding: 0;
   overflow: hidden;
   display: grid;
   grid-template-columns: 1fr;
 }
-.ow-card.editing {
+.split-card.editing {
   grid-template-columns: 1fr 340px;
   align-items: stretch;
 }
-.ow-main {
+.split-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.ow-head {
+.split-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -1289,7 +1285,7 @@ input.cell-date:disabled {
 }
 /* Two classes, to outrank the card's generic uppercase `.card h2` eyebrow —
    this panel leads with a real title, not a section label. */
-.ow-head .ow-title {
+.split-head .split-title {
   margin: 0 0 2px;
   font-family: var(--font-cond);
   font-weight: 700;
@@ -1298,12 +1294,12 @@ input.cell-date:disabled {
   text-transform: none;
   color: var(--text);
 }
-.ow-sub {
+.split-sub {
   font-size: 13px;
   color: var(--text-dim);
   margin-top: 2px;
 }
-.ow-eyebrow {
+.split-eyebrow {
   font-family: var(--font-cond);
   font-weight: 700;
   font-size: 11px;
@@ -1311,42 +1307,42 @@ input.cell-date:disabled {
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.ow-net {
+.split-stat {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   white-space: nowrap;
 }
-.ow-net-val {
+.split-stat-val {
   font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-.ow-totals {
+.split-totals {
   display: flex;
   padding: 0 22px 14px;
 }
-.ow-total {
+.split-total {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 1px;
   font-size: 16px;
 }
-.ow-total + .ow-total {
+.split-total + .split-total {
   padding-left: 20px;
   border-left: 1px solid var(--border);
 }
-.ow-total:first-child {
+.split-total:first-child {
   padding-right: 20px;
 }
 
 /* One line per movement: colour spine, sentence, signed amount. */
-.ow-list {
+.split-list {
   display: flex;
   flex-direction: column;
 }
-.ow-line {
+.split-line {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1360,45 +1356,45 @@ input.cell-date:disabled {
   cursor: pointer;
   transition: background 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
-.ow-line:hover {
+.split-line:hover {
   background: var(--bg);
 }
-.ow-line.selected {
+.split-line.selected {
   background: var(--bg-elev-2);
   box-shadow: inset 3px 0 0 var(--text);
 }
-.ow-spine {
+.split-spine {
   width: 3px;
   align-self: stretch;
   border-radius: 2px;
 }
-.ow-line-body {
+.split-line-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.ow-line-desc {
+.split-line-desc {
   font-size: 15px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ow-line-meta {
+.split-line-meta {
   font-size: 13px;
   color: var(--text-dim);
 }
-.ow-line-amt {
+.split-line-amt {
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
 }
-.ow-empty {
+.split-empty {
   padding: 14px 22px 4px;
 }
-.ow-foot {
+.split-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1407,13 +1403,13 @@ input.cell-date:disabled {
   margin-top: auto;
   border-top: 1px solid var(--border);
 }
-.ow-add {
+.split-add {
   display: flex;
   gap: 8px;
 }
 
 /* The editing panel — one line at a time, flush to the card's right edge. */
-.ow-editor {
+.split-editor {
   background: var(--bg-elev-2);
   border-left: 1px solid var(--border);
   padding: 20px 20px 18px;
@@ -1422,7 +1418,7 @@ input.cell-date:disabled {
   gap: 14px;
   min-width: 0;
 }
-.ow-field {
+.split-field {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1433,8 +1429,8 @@ input.cell-date:disabled {
   text-transform: uppercase;
   color: #4a4a4a;
 }
-.ow-field input,
-.ow-field select {
+.split-field input,
+.split-field select {
   font-family: var(--font-body);
   font-size: 14px;
   font-weight: 400;
@@ -1446,19 +1442,19 @@ input.cell-date:disabled {
   border-radius: var(--radius-sm);
   background: var(--bg-elev);
 }
-.ow-field .money-input input {
+.split-field .money-input input {
   border: 0;
   padding: 0;
 }
-.ow-dates {
+.split-pair {
   display: flex;
   gap: 10px;
 }
-.ow-dates .ow-field {
+.split-pair .split-field {
   flex: 1;
   min-width: 0;
 }
-.ow-toggle {
+.split-toggle {
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -1466,7 +1462,7 @@ input.cell-date:disabled {
   border: 1px solid var(--border);
   border-radius: 999px;
 }
-.ow-toggle button {
+.split-toggle button {
   flex: 1;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -1481,10 +1477,10 @@ input.cell-date:disabled {
   white-space: nowrap;
   cursor: pointer;
 }
-.ow-toggle button.on {
+.split-toggle button.on {
   color: #fff;
 }
-.ow-hint {
+.split-hint {
   margin: 0;
   font-family: var(--font-body);
   font-size: 13px;
@@ -1494,17 +1490,17 @@ input.cell-date:disabled {
   line-height: 1.45;
   color: var(--text-dim);
 }
-.ow-remove {
+.split-remove {
   margin-top: auto;
   align-self: flex-start;
   color: var(--text-dim);
 }
-.ow-remove:hover {
+.split-remove:hover {
   border-color: var(--red);
   color: var(--red);
 }
 
-/* Linking a projection to the real bills that stand in for it. */
+/* ---- Other Withdrawals: linking a projection to the bills that cover it --- */
 .ow-coverage {
   display: flex;
   align-items: center;
@@ -1576,11 +1572,96 @@ input.cell-date:disabled {
 
 /* Below this the detail panel has nowhere to sit — stack it under the list. */
 @media (max-width: 900px) {
-  .ow-card.editing {
+  .split-card.editing {
     grid-template-columns: 1fr;
   }
-  .ow-editor {
+  .split-editor {
     border-left: 0;
     border-top: 1px solid var(--border);
   }
+}
+
+/* ---- Staff roster: the split card's roster-wide settings and line extras -- */
+.staff-settings {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+  padding: 0 22px 10px;
+}
+.staff-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.staff-setting-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.staff-setting-ctl input {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text);
+}
+.staff-note {
+  padding: 0 22px 14px;
+  max-width: 78ch;
+}
+/* Cost center rides beside the name — a quiet tag, not a second column. */
+.staff-cc {
+  margin-left: 8px;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  vertical-align: middle;
+}
+.split-line-unit {
+  color: var(--text-faint);
+  font-weight: 400;
+  margin-left: 3px;
+}
+.staff-raise {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.staff-former {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 22px 10px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.staff-former:hover {
+  color: var(--text);
+}
+/* Field groups in the detail panel: a labelled cluster, not a new section. */
+.split-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }

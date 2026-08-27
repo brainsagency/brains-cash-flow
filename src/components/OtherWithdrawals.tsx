@@ -151,50 +151,50 @@ export function OtherWithdrawals() {
   };
 
   return (
-    <div className={`card ow-card${editing ? " editing" : ""}`}>
-      <div className="ow-main">
-        <div className="ow-head">
+    <div className={`card split-card${editing ? " editing" : ""}`}>
+      <div className="split-main">
+        <div className="split-head">
           <div>
-            <h2 className="ow-title">Other Withdrawals &amp; Reimbursements</h2>
-            <div className="ow-sub">
+            <h2 className="split-title">Other Withdrawals &amp; Reimbursements</h2>
+            <div className="split-sub">
               {rows.length} line{rows.length === 1 ? "" : "s"} · {recurringCount} recurring · cash movements that
               aren&apos;t on the books
             </div>
           </div>
-          <div className="ow-net">
-            <span className="ow-eyebrow">{net < 0 ? "Net gain / occurrence" : "Net drain / occurrence"}</span>
-            <span className="ow-net-val mono">{fmtMoney(Math.abs(net))}</span>
+          <div className="split-stat">
+            <span className="split-eyebrow">{net < 0 ? "Net gain / occurrence" : "Net drain / occurrence"}</span>
+            <span className="split-stat-val mono">{fmtMoney(Math.abs(net))}</span>
           </div>
         </div>
 
-        <div className="ow-totals">
-          <div className="ow-total">
-            <span className="ow-eyebrow" style={{ color: HUE.out }}>Money out</span>
+        <div className="split-totals">
+          <div className="split-total">
+            <span className="split-eyebrow" style={{ color: HUE.out }}>Money out</span>
             <span className="mono">{fmtMoney(totalOut)}</span>
           </div>
-          <div className="ow-total">
-            <span className="ow-eyebrow" style={{ color: HUE.in }}>Money in</span>
+          <div className="split-total">
+            <span className="split-eyebrow" style={{ color: HUE.in }}>Money in</span>
             <span className="mono">{fmtMoney(totalIn)}</span>
           </div>
         </div>
 
-        <div className="ow-list">
+        <div className="split-list">
           {rows.length === 0 && (
-            <div className="ow-empty muted">Nothing yet — add your first line below.</div>
+            <div className="split-empty muted">Nothing yet — add your first line below.</div>
           )}
           {rows.map((r) => {
             const covered = coverageNote(r, anchorMonth);
             return (
               <button
                 key={r.id}
-                className={`ow-line${editing && r.id === selId ? " selected" : ""}`}
+                className={`split-line${editing && r.id === selId ? " selected" : ""}`}
                 onClick={() => openOn(r.id)}
                 title={editing ? "Edit this line" : "Open the editor on this line"}
               >
-                <span className="ow-spine" style={{ background: HUE[r.direction] }} />
-                <span className="ow-line-body">
-                  <span className="ow-line-desc">{r.memo || <span className="muted">Unlabeled</span>}</span>
-                  <span className="ow-line-meta">{describe(r)}</span>
+                <span className="split-spine" style={{ background: HUE[r.direction] }} />
+                <span className="split-line-body">
+                  <span className="split-line-desc">{r.memo || <span className="muted">Unlabeled</span>}</span>
+                  <span className="split-line-meta">{describe(r)}</span>
                   {covered && (
                     <span className="ow-coverage">
                       <span className="chip info">Netted against bills</span>
@@ -202,7 +202,7 @@ export function OtherWithdrawals() {
                     </span>
                   )}
                 </span>
-                <span className="ow-line-amt mono" style={{ color: HUE[r.direction] }}>
+                <span className="split-line-amt mono" style={{ color: HUE[r.direction] }}>
                   {r.direction === "in" ? "+" : "−"}
                   {fmtMoney(r.amount, { cents: r.amount % 1 !== 0 })}
                 </span>
@@ -211,10 +211,10 @@ export function OtherWithdrawals() {
           })}
         </div>
 
-        <div className="ow-foot">
+        <div className="split-foot">
           {editing ? (
             <>
-              <div className="ow-add">
+              <div className="split-add">
                 <button className="btn sm" onClick={() => add("out")}>+ Money out</button>
                 <button className="btn sm ghost" onClick={() => add("in")}>+ Money in</button>
               </div>
@@ -222,7 +222,7 @@ export function OtherWithdrawals() {
             </>
           ) : (
             <>
-              <div className="ow-add" />
+              <div className="split-add" />
               {rows.length === 0 ? (
                 <button className="btn sm" onClick={() => add("out")}>+ Add withdrawal</button>
               ) : (
@@ -234,10 +234,10 @@ export function OtherWithdrawals() {
       </div>
 
       {editing && selected && (
-        <div className="ow-editor">
-          <span className="ow-eyebrow">Editing</span>
+        <div className="split-editor">
+          <span className="split-eyebrow">Editing</span>
 
-          <label className="ow-field">
+          <label className="split-field">
             Description
             <input
               value={selected.memo}
@@ -246,14 +246,14 @@ export function OtherWithdrawals() {
             />
           </label>
 
-          <label className="ow-field">
+          <label className="split-field">
             {selected.repeats === "once" ? "Amount" : "Amount per occurrence"}
             <MoneyInput value={selected.amount} onChange={(n) => update(selected.id, { amount: n })} />
           </label>
 
-          <div className="ow-field">
+          <div className="split-field">
             <span>Direction</span>
-            <div className="ow-toggle">
+            <div className="split-toggle">
               {(["out", "in"] as Dir[]).map((d) => (
                 <button
                   key={d}
@@ -267,7 +267,7 @@ export function OtherWithdrawals() {
             </div>
           </div>
 
-          <label className="ow-field">
+          <label className="split-field">
             Repeats
             <select
               value={selected.repeats}
@@ -279,8 +279,8 @@ export function OtherWithdrawals() {
             </select>
           </label>
 
-          <div className="ow-dates">
-            <label className="ow-field">
+          <div className="split-pair">
+            <label className="split-field">
               {selected.repeats === "once" ? (selected.direction === "in" ? "Funds in" : "Funds out") : "Starting"}
               <input
                 type="date"
@@ -289,7 +289,7 @@ export function OtherWithdrawals() {
               />
             </label>
             {selected.repeats !== "once" && (
-              <label className="ow-field">
+              <label className="split-field">
                 Ends (optional)
                 <input
                   type="date"
@@ -309,9 +309,9 @@ export function OtherWithdrawals() {
             />
           )}
 
-          <p className="ow-hint">{hintFor(selected)}</p>
+          <p className="split-hint">{hintFor(selected)}</p>
 
-          <button className="btn sm ow-remove" onClick={() => remove(selected.id)}>
+          <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
             Remove line
           </button>
         </div>
@@ -396,7 +396,7 @@ function VendorCoverage({
     : vendors;
 
   return (
-    <div className="ow-field ow-link">
+    <div className="split-field">
       <span>Covered by bills from</span>
       <div className="ow-link-chips">
         {selected.map((vendor) => (
@@ -413,7 +413,7 @@ function VendorCoverage({
         )}
       </div>
       {selected.length === 0 && !open && vendors.length > 0 && (
-        <span className="ow-hint">Nothing linked — this line projects in full.</span>
+        <span className="split-hint">Nothing linked — this line projects in full.</span>
       )}
       {open && (
         <div className="ow-link-list">

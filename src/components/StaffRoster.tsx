@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { isValidISODate, type ForecastInput, type StaffMember } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
@@ -8,11 +8,15 @@ import { MoneyInput } from "@/components/fields.js";
 
 /**
  * Staff roster — the authoritative payroll source. Each person carries an
- * annual salary, a hire date, an optional termination date, and optional
- * severance. When the roster has anyone in it, the store expands it into
- * payroll cash streams (semi-monthly, on the 1st & 15th) that replace the
- * manual "Payroll" line, and adds a one-off severance disbursement on each
- * termination date.
+ * annual salary, a hire date, an optional termination date, optional severance,
+ * an optional scheduled raise, and a cost center. When the roster has anyone in
+ * it, the store expands it into payroll cash streams (semi-monthly, on the 1st
+ * & 15th) that replace the manual "Payroll" line, and adds a one-off severance
+ * disbursement on each termination date.
+ *
+ * Laid out as a split card: the roster reads as one line per person, and the
+ * detail panel edits whoever is selected. A person carries ten fields — too
+ * many for a row, which is why the raise and cost center had no home before.
  */
 
 function isActiveThisMonth(m: StaffMember, anchor: string): boolean {
@@ -31,12 +35,13 @@ function effectiveSalary(m: StaffMember, anchor: string): number {
   if (m.salaryChangeDate && m.newSalary !== undefined && m.salaryChangeDate <= anchor) return m.newSalary;
   return m.annualSalary;
 }
+/** A raise that hasn't taken effect yet — worth showing on the line. */
+function pendingRaise(m: StaffMember, anchor: string): { date: string; amount: number } | null {
+  if (!m.salaryChangeDate || m.newSalary === undefined) return null;
+  if (!isValidISODate(m.salaryChangeDate) || m.salaryChangeDate <= anchor) return null;
+  return { date: m.salaryChangeDate, amount: m.newSalary };
+}
 const money0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
-
-const CARD: CSSProperties = { background: "var(--bg-elev)", border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 };
-const eyebrow: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-dim)" };
-const editLink: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer", padding: 0 };
-const formerToggle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", background: "transparent", border: "none", borderTop: "1px solid rgba(19,19,19,0.05)", cursor: "pointer", padding: "13px 4px 8px", width: "100%", textAlign: "left" };
 
 export function StaffRoster() {
   const { input, setInput } = useStore();
@@ -44,163 +49,288 @@ export function StaffRoster() {
   const load = input.staffLoadFactor ?? 1;
   const anchor = input.anchorDate;
   const [editing, setEditing] = useState(false);
+  const [selId, setSelId] = useState<string | null>(null);
   const [showFormer, setShowFormer] = useState(false);
 
   const write = (next: StaffMember[]) => setInput((prev: ForecastInput) => ({ ...prev, staff: next }));
   const paidThrough = input.payrollPaidThrough;
   const setPaidThrough = (v: string) => setInput((prev: ForecastInput) => ({ ...prev, payrollPaidThrough: v || undefined }));
   const setLoad = (pct: number) => setInput((prev: ForecastInput) => ({ ...prev, staffLoadFactor: Math.max(1, 1 + (pct || 0) / 100) }));
-  const update = (i: number, patch: Partial<StaffMember>) => write(staff.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
-  const remove = (i: number) => write(staff.filter((_, idx) => idx !== i));
-  const add = () => write([...staff, { id: `staff-${Date.now()}`, name: "", annualSalary: 0, doh: anchor }]);
+  const update = (id: string, patch: Partial<StaffMember>) =>
+    write(staff.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  const remove = (id: string) => {
+    write(staff.filter((m) => m.id !== id));
+    setSelId(staff.find((m) => m.id !== id)?.id ?? null);
+  };
+  const add = () => {
+    const id = `staff-${Date.now()}`;
+    write([...staff, { id, name: "", annualSalary: 0, doh: anchor }]);
+    setEditing(true);
+    setSelId(id);
+  };
+  /** Clicking a person in the read view opens the editor on them. */
+  const openOn = (id: string) => {
+    setSelId(id);
+    setEditing(true);
+  };
 
   const active = staff.filter((m) => isActiveThisMonth(m, anchor));
-  const monthlyPayroll = (active.reduce((s, m) => s + effectiveSalary(m, anchor), 0) * load) / 12;
+  const grossMonthly = active.reduce((s, m) => s + effectiveSalary(m, anchor), 0) / 12;
+  const loadMonthly = grossMonthly * (load - 1);
   const loadPct = Math.round((load - 1) * 100);
-  const formerCount = staff.filter((m) => isFormer(m, anchor)).length;
+  const current = staff.filter((m) => !isFormer(m, anchor));
+  const former = staff.filter((m) => isFormer(m, anchor));
 
-  const readRow = (m: StaffMember) => (
-    <div key={m.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, padding: "13px 4px", borderTop: "1px solid rgba(19,19,19,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", minWidth: 0 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{m.name || "Unnamed"}</span>
-        {isValidISODate(m.doh) && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>since {fmtShortDate(m.doh)}</span>}
-        {m.dot && isValidISODate(m.dot) && <span style={{ fontSize: 13, color: "var(--red)" }}>· ends {fmtShortDate(m.dot)}</span>}
-        {m.severance ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· sev {fmtMoney(m.severance)}{m.severancePayout === "payroll" ? " (payroll)" : ""}</span> : null}
-        {m.vacationPayout ? <span style={{ fontSize: 13, color: "var(--text-dim)" }}>· vac {fmtMoney(m.vacationPayout)}</span> : null}
-      </div>
-      <div style={{ fontSize: 14.5, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-        {fmtMoney(m.annualSalary, { cents: true })}<span style={{ color: "var(--text-faint)", fontWeight: 400 }}> /yr</span>
-      </div>
-    </div>
-  );
+  const selected = staff.find((m) => m.id === selId) ?? null;
+  useEffect(() => {
+    if (!editing) return;
+    if (!staff.some((m) => m.id === selId)) setSelId(staff[0]?.id ?? null);
+  }, [editing, staff, selId]);
 
-  const editRow = (m: StaffMember, i: number) => (
-    <div key={m.id} className="staff-edit-row" style={{ alignItems: "center", marginBottom: 8 }}>
-      <input value={m.name} placeholder="Full name" onChange={(e) => update(i, { name: e.target.value })} />
-      <MoneyInput value={m.annualSalary} step="0.01" onChange={(n) => update(i, { annualSalary: n })} />
-      <input type="date" value={m.doh} onChange={(e) => update(i, { doh: e.target.value })} />
-      <input type="date" value={m.dot ?? ""} onChange={(e) => update(i, { dot: e.target.value || undefined })} />
-      <MoneyInput value={m.severance ?? 0} step="0.01" onChange={(n) => update(i, { severance: n || undefined })} />
-      <select value={m.severancePayout ?? "lump"} onChange={(e) => update(i, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}>
-        <option value="lump">Lump sum</option>
-        <option value="payroll">On payroll</option>
-      </select>
-      <MoneyInput value={m.vacationPayout ?? 0} step="0.01" onChange={(n) => update(i, { vacationPayout: n || undefined })} />
-      <button className="btn sm ghost" onClick={() => remove(i)} title="Remove">✕</button>
-    </div>
-  );
+  const person = (m: StaffMember) => {
+    const raise = pendingRaise(m, anchor);
+    const ending = !!(m.dot && isValidISODate(m.dot));
+    const hue = ending ? "var(--red)" : "var(--green)";
+    return (
+      <button
+        key={m.id}
+        className={`split-line${editing && m.id === selId ? " selected" : ""}`}
+        onClick={() => openOn(m.id)}
+        title={editing ? "Edit this person" : "Open the editor on this person"}
+      >
+        <span className="split-spine" style={{ background: hue }} />
+        <span className="split-line-body">
+          <span className="split-line-desc">
+            {m.name || <span className="muted">Unnamed</span>}
+            {m.costCenter && <span className="staff-cc">{m.costCenter}</span>}
+          </span>
+          <span className="split-line-meta">{describe(m, anchor)}</span>
+        </span>
+        <span className="split-line-amt mono">
+          {fmtMoney(effectiveSalary(m, anchor))}
+          <span className="split-line-unit">/yr</span>
+          {raise && (
+            <span className="staff-raise" title={`Rises to ${fmtMoney(raise.amount)} on ${fmtShortDate(raise.date)}`}>
+              → {fmtMoney(raise.amount)}
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={CARD}>
-        {/* Header: title + monthly total + Edit */}
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
-          <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 17, letterSpacing: ".02em" }}>Staff Roster</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
-            <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 20, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
-              {money0(monthlyPayroll)}<span style={{ color: "var(--text-faint)", fontWeight: 400 }}>/mo</span>
+    <div className={`card split-card${editing ? " editing" : ""}`}>
+      <div className="split-main">
+        <div className="split-head">
+          <div>
+            <h2 className="split-title">Staff Roster</h2>
+            <div className="split-sub">
+              {active.length} active · {staff.length} on roster · drives payroll on the 1st &amp; 15th
             </div>
-            {staff.length > 0 && (
-              <button style={editLink} onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit"}</button>
-            )}
+          </div>
+          <div className="split-stat">
+            <span className="split-eyebrow">Payroll / month</span>
+            <span className="split-stat-val mono">{money0(grossMonthly + loadMonthly)}</span>
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55, margin: 0, maxWidth: 1000 }}>
-          The roster drives payroll (semi-monthly, 1st &amp; 15th) — while anyone is listed here it replaces the manual
-          Payroll line. To model a departure as an <b style={{ color: "#4a4a4a" }}>actual</b>, set a Term date (and any
-          severance / vacation payout): pay stops and those cash-outs land on that date. Hypothetical cuts belong in Scenarios.
+        <div className="split-totals">
+          <div className="split-total">
+            <span className="split-eyebrow">Gross salaries</span>
+            <span className="mono">{money0(grossMonthly)}</span>
+          </div>
+          <div className="split-total">
+            <span className="split-eyebrow">Employer load · {loadPct}%</span>
+            <span className="mono">{money0(loadMonthly)}</span>
+          </div>
+        </div>
+
+        <div className="staff-settings">
+          <label className="staff-setting">
+            <span className="split-eyebrow">Payroll paid through</span>
+            <span className="staff-setting-ctl">
+              <input type="date" value={paidThrough ?? ""} onChange={(e) => setPaidThrough(e.target.value)} />
+              {paidThrough && (
+                <button className="btn sm ghost" onClick={() => setPaidThrough("")}>Clear</button>
+              )}
+            </span>
+          </label>
+          <label className="staff-setting">
+            <span className="split-eyebrow">Employer load %</span>
+            <span className="staff-setting-ctl">
+              <input type="number" min={0} step={1} value={loadPct} onChange={(e) => setLoad(Number(e.target.value))} style={{ width: 78 }} />
+              <span className="muted">taxes, benefits, 401k</span>
+            </span>
+          </label>
+        </div>
+        <p className="split-hint staff-note">
+          Runs on or before the paid-through date are treated as already paid and dropped from the forecast — payroll often
+          debits a day or two early, so set it to the pay date of the last run that cleared. To model a departure as an
+          actual, give the person a term date; hypothetical cuts belong in Scenarios.
         </p>
 
-        {/* Payroll reconciliation: mark runs already pulled so a run that
-            already left the bank isn't subtracted again by the forecast. */}
-        <div>
-          <div style={{ ...eyebrow, marginBottom: 6 }}>Payroll already paid through</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <input
-              type="date"
-              value={paidThrough ?? ""}
-              onChange={(e) => setPaidThrough(e.target.value)}
-              style={{ border: "1px solid var(--border)", borderRadius: 8, background: "#fff", padding: "7px 9px", fontFamily: "var(--font-body)", fontSize: 14 }}
-            />
-            {paidThrough && <button style={editLink} onClick={() => setPaidThrough("")}>Clear</button>}
-            <span style={{ fontSize: 12.5, color: "var(--text-dim)", maxWidth: 640, lineHeight: 1.5 }}>
-              Runs on or before this date are treated as already paid and dropped from the forecast. Payroll often debits a
-              day or two early, so set it to the pay date of the last run that cleared (e.g. the 15th) — otherwise a run
-              that already left the bank gets counted twice.
-            </span>
-          </div>
+        <div className="split-list">
+          {staff.length === 0 && (
+            <div className="split-empty muted">No staff yet — add people below, or paste your roster and I&apos;ll bulk-load it.</div>
+          )}
+          {current.map(person)}
+          {former.length > 0 && (
+            <>
+              <button className="staff-former" onClick={() => setShowFormer((v) => !v)}>
+                <span>{showFormer ? "▾" : "▸"}</span> Former · {former.length}
+              </button>
+              {showFormer && former.map(person)}
+            </>
+          )}
         </div>
 
-        {/* Employer load */}
-        <div>
-          <div style={{ ...eyebrow, marginBottom: 6 }}>Employer load (taxes, benefits, 401k)</div>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {editing ? (
-                <input type="number" min={0} step={1} value={loadPct} onChange={(e) => setLoad(Number(e.target.value))} style={{ width: 80, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", padding: "6px 8px", fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 18 }} />
+        <div className="split-foot">
+          {editing ? (
+            <>
+              <div className="split-add">
+                <button className="btn sm" onClick={add}>+ Add staff member</button>
+              </div>
+              <button className="btn sm primary" onClick={() => setEditing(false)}>Done</button>
+            </>
+          ) : (
+            <>
+              <div className="split-add" />
+              {staff.length === 0 ? (
+                <button className="btn sm" onClick={add}>+ Add staff member</button>
               ) : (
-                <span style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 20, color: "var(--text)" }}>{loadPct}%</span>
+                <button className="btn sm" onClick={() => setEditing(true)}>Edit</button>
               )}
-              <span style={{ fontSize: 13.5, color: "var(--text-dim)" }}>on gross salary</span>
-            </div>
-            <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{active.length} active · {staff.length} on roster</span>
-          </div>
+            </>
+          )}
         </div>
-
-        {staff.length === 0 && (
-          <div style={{ color: "var(--text-dim)", fontSize: 13 }}>
-            No staff yet — add people below, or paste your roster and I&apos;ll bulk-load it.
-          </div>
-        )}
-
-        {/* Read view */}
-        {!editing && (
-          <div>
-            {staff.filter((m) => !isFormer(m, anchor)).map(readRow)}
-            {formerCount > 0 && (
-              <div>
-                <button style={formerToggle} onClick={() => setShowFormer((v) => !v)}>
-                  <span>{showFormer ? "▾" : "▸"}</span> Former · {formerCount}
-                </button>
-                {showFormer && staff.filter((m) => isFormer(m, anchor)).map(readRow)}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Edit view */}
-        {editing && (
-          <div className="table-scroll">
-            {staff.length > 0 && (
-              <div className="staff-edit-row" style={{ marginBottom: 6, fontSize: 12, color: "var(--text-dim)" }}>
-                <span>Name</span>
-                <span>Annual salary</span>
-                <span>Hire date</span>
-                <span>Term date</span>
-                <span>Severance</span>
-                <span>Sev. payout</span>
-                <span>Vacation payout</span>
-                <span />
-              </div>
-            )}
-            {staff.map((m, i) => [m, i] as const).filter(([m]) => !isFormer(m, anchor)).map(([m, i]) => editRow(m, i))}
-            {formerCount > 0 && (
-              <div>
-                <button style={formerToggle} onClick={() => setShowFormer((v) => !v)}>
-                  <span>{showFormer ? "▾" : "▸"}</span> Former · {formerCount}
-                </button>
-                {showFormer && staff.map((m, i) => [m, i] as const).filter(([m]) => isFormer(m, anchor)).map(([m, i]) => editRow(m, i))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {editing && <button className="btn sm" onClick={add} style={{ marginTop: 6, alignSelf: "flex-start" }}>+ Add staff member</button>}
-        {!editing && staff.length === 0 && (
-          <button className="btn sm" onClick={() => { setEditing(true); add(); }} style={{ marginTop: 6, alignSelf: "flex-start" }}>+ Add staff member</button>
-        )}
       </div>
+
+      {editing && selected && (
+        <div className="split-editor">
+          <span className="split-eyebrow">Editing</span>
+
+          <label className="split-field">
+            Full name
+            <input
+              value={selected.name}
+              placeholder="Full name"
+              onChange={(e) => update(selected.id, { name: e.target.value })}
+            />
+          </label>
+
+          <div className="split-pair">
+            <label className="split-field">
+              Annual salary
+              <MoneyInput value={selected.annualSalary} step="0.01" onChange={(n) => update(selected.id, { annualSalary: n })} />
+            </label>
+            <label className="split-field">
+              Cost center
+              <input
+                value={selected.costCenter ?? ""}
+                placeholder="e.g. Creative"
+                onChange={(e) => update(selected.id, { costCenter: e.target.value || undefined })}
+              />
+            </label>
+          </div>
+
+          <label className="split-field">
+            Hire date
+            <input type="date" value={selected.doh} onChange={(e) => update(selected.id, { doh: e.target.value })} />
+          </label>
+
+          <div className="split-group">
+            <span className="split-eyebrow">Scheduled raise</span>
+            <div className="split-pair">
+              <label className="split-field">
+                Effective
+                <input
+                  type="date"
+                  value={selected.salaryChangeDate ?? ""}
+                  onChange={(e) => update(selected.id, { salaryChangeDate: e.target.value || undefined })}
+                />
+              </label>
+              <label className="split-field">
+                New salary
+                <MoneyInput
+                  value={selected.newSalary ?? 0}
+                  step="0.01"
+                  onChange={(n) => update(selected.id, { newSalary: n || undefined })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="split-group">
+            <span className="split-eyebrow">Departure</span>
+            <label className="split-field">
+              Term date
+              <input
+                type="date"
+                value={selected.dot ?? ""}
+                onChange={(e) => update(selected.id, { dot: e.target.value || undefined })}
+              />
+            </label>
+            <div className="split-pair">
+              <label className="split-field">
+                Severance
+                <MoneyInput
+                  value={selected.severance ?? 0}
+                  step="0.01"
+                  onChange={(n) => update(selected.id, { severance: n || undefined })}
+                />
+              </label>
+              <label className="split-field">
+                Paid as
+                <select
+                  value={selected.severancePayout ?? "lump"}
+                  onChange={(e) => update(selected.id, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}
+                >
+                  <option value="lump">Lump sum</option>
+                  <option value="payroll">On payroll</option>
+                </select>
+              </label>
+            </div>
+            <label className="split-field">
+              Vacation / PTO payout
+              <MoneyInput
+                value={selected.vacationPayout ?? 0}
+                step="0.01"
+                onChange={(n) => update(selected.id, { vacationPayout: n || undefined })}
+              />
+            </label>
+          </div>
+
+          <p className="split-hint">{hintFor(selected, anchor, load)}</p>
+
+          <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
+            Remove person
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+/** The person's tenure as a sentence: since when, until when, what's owed. */
+function describe(m: StaffMember, anchor: string): string {
+  const parts: string[] = [];
+  if (isValidISODate(m.doh)) parts.push(`Since ${fmtShortDate(m.doh)}`);
+  const raise = pendingRaise(m, anchor);
+  if (raise) parts.push(`raise ${fmtShortDate(raise.date)}`);
+  if (m.dot && isValidISODate(m.dot)) {
+    parts.push(`${isFormer(m, anchor) ? "left" : "ends"} ${fmtShortDate(m.dot)}`);
+  }
+  if (m.severance) parts.push(`sev ${fmtMoney(m.severance)}${m.severancePayout === "payroll" ? " on payroll" : ""}`);
+  if (m.vacationPayout) parts.push(`vac ${fmtMoney(m.vacationPayout)}`);
+  return parts.length ? parts.join(" · ") : "No hire date set";
+}
+
+/** What the selected person costs the forecast, in plain language. */
+function hintFor(m: StaffMember, anchor: string, load: number): string {
+  const monthly = (effectiveSalary(m, anchor) * load) / 12;
+  if (isFormer(m, anchor)) return "Already departed — no further payroll, but any severance still lands on the term date.";
+  const base = `Costs ${money0(monthly)} a month loaded, paid across the 1st and 15th.`;
+  if (m.dot && isValidISODate(m.dot)) return `${base} Pay stops on ${fmtShortDate(m.dot)}.`;
+  return base;
 }
