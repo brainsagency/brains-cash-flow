@@ -25,7 +25,9 @@ export const SEED_INPUT: ForecastInput = {
     { id: "payroll", category: "payroll", amount: 150_000, frequency: "semimonthly", startDate: SEED_ANCHOR, memo: "Payroll (sample)" },
     { id: "opex", category: "operatingExpense", amount: 80_000, frequency: "monthly", startDate: SEED_ANCHOR, memo: "Operating expense (sample)" },
     { id: "amex", category: "amex", amount: 40_000, frequency: "monthly", startDate: SEED_ANCHOR, memo: "American Express (sample)" },
-    { id: "brandy", category: "otherWithdrawals", amount: 18_693, frequency: "monthly", startDate: "2026-08-01", memo: "Brandy monthly payment" },
+    // Linked to the vendor it's paid through, so the months Bill.com has an
+    // actual buyout bill for run on that bill instead of this projection.
+    { id: "brandy", category: "otherWithdrawals", amount: 18_693, frequency: "monthly", startDate: "2026-08-01", memo: "Brandy monthly payment", coveredByVendors: ["Brandy Amidon (Buyout)"] },
   ],
   events: [
     { id: "ar1", category: "currentAR", amount: 120_000, date: "2026-07-17", memo: "Reel Products (sample)" },

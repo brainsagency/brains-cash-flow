@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import type { CashEvent } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
+import { splitBillMemo, vendorKey } from "@/lib/integrations/billdotcom/coverage.js";
 import { fmtMoney, fmtShortDate } from "@/lib/format.js";
 
 /**
@@ -29,11 +30,8 @@ interface Row {
   amount: number;
   planned: string | null;
   inCF: boolean;
-}
-
-function splitMemo(memo: string): { vendor: string; num: string } {
-  const m = memo.match(/^(.*?)\s*#(\S+)\s*$/);
-  return m ? { vendor: m[1]!.trim(), num: m[2]! } : { vendor: memo, num: "" };
+  /** The Other Withdrawals line this bill is netted against, if any. */
+  covers: string | null;
 }
 function monthFull(iso: string): string {
   const [y, mo] = iso.split("-").map(Number) as [number, number];
@@ -43,10 +41,23 @@ function monthFull(iso: string): string {
 const eyebrow: CSSProperties = { fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: SUBTLE };
 
 export function BillsAP() {
-  const { syncedApRaw, adjustments, setAdjustment } = useStore();
+  const { input, syncedApRaw, adjustments, setAdjustment } = useStore();
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("due");
   const [q, setQ] = useState("");
+
+  // Vendors linked to a recurring withdrawal in Other Withdrawals: their bills
+  // are netted out of that projection, so the two never double-count. Surfaced
+  // here so a linked bill reads as deliberate rather than duplicated.
+  const linkedVendors = useMemo(() => {
+    const byVendor = new Map<string, string>();
+    for (const item of input.recurring ?? []) {
+      for (const vendor of item.coveredByVendors ?? []) {
+        byVendor.set(vendorKey(vendor), item.memo || "an Other Withdrawals line");
+      }
+    }
+    return byVendor;
+  }, [input.recurring]);
 
   const rows: Row[] = useMemo(
     () =>
@@ -54,7 +65,7 @@ export function BillsAP() {
         const id = e.id ?? "";
         const adj = adjustments[id] ?? {};
         const excluded = adj.excluded === true;
-        const { vendor, num } = splitMemo(e.memo ?? "—");
+        const { vendor, num } = splitBillMemo(e.memo ?? "—");
         return {
           id,
           vendor,
@@ -64,9 +75,10 @@ export function BillsAP() {
           amount: e.amount,
           planned: adj.date ?? adj.payDate ?? null,
           inCF: !excluded,
+          covers: linkedVendors.get(vendorKey(vendor)) ?? null,
         };
       }),
-    [syncedApRaw, adjustments],
+    [syncedApRaw, adjustments, linkedVendors],
   );
 
   const counts = useMemo(() => {
@@ -171,6 +183,14 @@ export function BillsAP() {
                     <div style={{ minWidth: 0, fontSize: 14.5, lineHeight: 1.35, color: r.status === "excluded" ? SUBTLE : "var(--text)" }}>
                       <span style={{ fontWeight: 700 }}>{r.vendor}</span>
                       {r.num && <span style={{ color: "var(--text-faint)" }}> #{r.num}</span>}
+                      {r.covers && r.inCF && (
+                        <span
+                          title={`Netted against "${r.covers}" in Other Withdrawals — that projection steps aside for the months this vendor is billed, so it isn't counted twice.`}
+                          style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 9.5, letterSpacing: ".12em", textTransform: "uppercase", color: BLUE, border: `1px solid rgba(53,101,227,0.28)`, borderRadius: 999, padding: "2px 7px", marginLeft: 8, whiteSpace: "nowrap", verticalAlign: "middle" }}
+                        >
+                          Linked
+                        </span>
+                      )}
                     </div>
                     <div><StatusBadge status={r.status} /></div>
                     <div style={{ fontSize: 13.5, color: r.status === "excluded" ? SUBTLE : "#4a4a4a" }}>{fmtShortDate(r.due)}</div>
@@ -201,7 +221,7 @@ export function BillsAP() {
         </div>
 
         <p style={{ fontSize: 13, color: SUBTLE, lineHeight: 1.55, margin: "2px 0 0" }}>
-          Untick <b style={{ color: "#4a4a4a" }}>In CF</b> to keep a bill out of the forecast (e.g. production / passthrough for the sister company). Set a planned pay date when you&apos;ll pay later than the due date — the forecast uses your date.
+          Untick <b style={{ color: "#4a4a4a" }}>In CF</b> to keep a bill out of the forecast (e.g. production / passthrough for the sister company). Set a planned pay date when you&apos;ll pay later than the due date — the forecast uses your date. A <b style={{ color: "#4a4a4a" }}>Linked</b> bill is already netted against a recurring line in Other Withdrawals — leave it ticked; the projection stands aside for the months it covers.
         </p>
       </div>
     </div>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CashCategory, CashEvent, RecurringFrequency, RecurringItem } from "@engine/index.js";
 import { useStore } from "@/lib/data/store.js";
-import { fmtMoney, fmtShortDate } from "@/lib/format.js";
+import { vendorKey, vendorSummaries, type VendorSummary } from "@/lib/integrations/billdotcom/coverage.js";
+import { fmtAxisLabel, fmtMoney, fmtShortDate } from "@/lib/format.js";
 import { MoneyInput } from "@/components/fields.js";
 
 type Kind = "oneoff" | "recurring";
@@ -19,6 +20,10 @@ interface OWRow {
   frequency: RecurringFrequency; // recurring cadence
   startDate: string; // recurring start
   endDate?: string; // recurring last occurrence (optional; loans / fixed-term)
+  /** Bill.com vendors whose real bills are this same money (see coverage.ts). */
+  coveredByVendors?: string[];
+  /** Derived: what those bills come to per month. Read-only — never persisted. */
+  coveredMonths?: Record<string, number>;
 }
 
 // Money out lives on the manual `otherWithdrawals` disbursement line; money in
@@ -47,9 +52,13 @@ function newId(): string {
 }
 
 export function OtherWithdrawals() {
-  const { input, setInput } = useStore();
+  const { input, setInput, syncedApRaw } = useStore();
   const anchor = input.anchorDate;
+  const anchorMonth = anchor.slice(0, 7);
   const [editing, setEditing] = useState(false);
+  // Vendors with open bills — the option list for linking a projection to the
+  // real bills that stand in for it once the month arrives.
+  const vendors = useMemo(() => vendorSummaries(syncedApRaw ?? []), [syncedApRaw]);
 
   // Derive the unified row list from both storage arrays (recurring first),
   // pulling both the outflow (otherWithdrawals) and inflow (notInvoiced) slices.
@@ -66,6 +75,8 @@ export function OtherWithdrawals() {
         frequency: r.frequency,
         startDate: r.startDate,
         endDate: r.endDate,
+        coveredByVendors: r.coveredByVendors,
+        coveredMonths: r.coveredMonths,
       })),
     ...(input.events ?? [])
       .filter((e) => e.category === OUT_CAT || e.category === IN_CAT)
@@ -103,6 +114,10 @@ export function OtherWithdrawals() {
           startDate: r.startDate,
           memo: r.memo,
           ...(r.endDate ? { endDate: r.endDate } : {}),
+          // `coveredMonths` is deliberately not written back: the store
+          // recomputes it from the AP feed on every merge, and persisting a
+          // stale copy would net out bills that are long since paid.
+          ...(r.coveredByVendors?.length ? { coveredByVendors: r.coveredByVendors } : {}),
         }));
       return { ...prev, events: [...keepEvents, ...owEvents], recurring: [...keepRecurring, ...owRecurring] };
     });
@@ -143,27 +158,36 @@ export function OtherWithdrawals() {
 
       {/* Read view */}
       {!editing &&
-        rows.map((r) => (
-          <div className="spec-row" key={r.id}>
-            <span className="label">
-              {r.memo || <span className="muted">Unlabeled</span>}
-              <span className="meta">{meta(r)}{r.direction === "in" ? " · reimbursement" : ""}</span>
-            </span>
-            <span className="val mono" style={r.direction === "in" ? { color: INFLOW } : undefined}>
-              {r.direction === "in" ? "+" : ""}{fmtMoney(r.amount, { cents: true })}
-              {r.kind === "recurring" && <span className="sub">/ea</span>}
-            </span>
-          </div>
-        ))}
+        rows.map((r) => {
+          const covered = coverageNote(r, anchorMonth);
+          return (
+            <div className="spec-row" key={r.id}>
+              <span className="label">
+                {r.memo || <span className="muted">Unlabeled</span>}
+                <span className="meta">{meta(r)}{r.direction === "in" ? " · reimbursement" : ""}</span>
+                {covered && (
+                  <span className="ow-coverage">
+                    <span className="chip info">Netted against bills</span>
+                    <span>{covered}</span>
+                  </span>
+                )}
+              </span>
+              <span className="val mono" style={r.direction === "in" ? { color: INFLOW } : undefined}>
+                {r.direction === "in" ? "+" : ""}{fmtMoney(r.amount, { cents: true })}
+                {r.kind === "recurring" && <span className="sub">/ea</span>}
+              </span>
+            </div>
+          );
+        })}
 
       {/* Edit view */}
       {editing && (
         <div className="table-scroll">
         {rows.map((r) => (
+          <div key={r.id} style={{ marginBottom: 8, minWidth: 820 }}>
           <div
             className="ow-row"
-            key={r.id}
-            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.4fr) 110px 104px 96px 300px auto", gap: 8, alignItems: "end", marginBottom: 8, minWidth: 820 }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.4fr) 110px 104px 96px 300px auto", gap: 8, alignItems: "end" }}
           >
             <div className="field">
               <label>Description</label>
@@ -214,6 +238,14 @@ export function OtherWithdrawals() {
             )}
             <button className="btn sm ghost" onClick={() => remove(r.id)} title="Remove">✕</button>
           </div>
+          {r.kind === "recurring" && r.direction === "out" && (
+            <VendorCoverage
+              selected={r.coveredByVendors ?? []}
+              vendors={vendors}
+              onChange={(next) => update(r.id, { coveredByVendors: next })}
+            />
+          )}
+          </div>
         ))}
         </div>
       )}
@@ -228,6 +260,107 @@ export function OtherWithdrawals() {
         <button className="btn sm" onClick={() => { setEditing(true); add("out"); }} style={{ marginTop: 6 }}>
           + Add other withdrawal
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Occurrences × per-occurrence amount for one calendar month, where the cadence
+ * makes that a fixed number. Weekly and biweekly items land 4 or 5 times
+ * depending on the month, so there's no single figure to compare bills against.
+ */
+function monthlyProjected(r: OWRow): number | null {
+  if (r.kind !== "recurring") return null;
+  if (r.frequency === "monthly") return r.amount;
+  if (r.frequency === "semimonthly") return r.amount * 2;
+  return null;
+}
+
+/**
+ * What the linked bills already cover, month by month, from the current month
+ * on — the plain-language version of the deduction the engine applies.
+ */
+function coverageNote(r: OWRow, fromMonth: string): string | null {
+  const months = Object.entries(r.coveredMonths ?? {})
+    .filter(([m]) => m >= fromMonth)
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (months.length === 0) return null;
+  const projected = monthlyProjected(r);
+  const shown = months.slice(0, 2).map(([month, billed]) => {
+    const label = fmtAxisLabel(`${month}-01`, "month");
+    if (projected === null) return `${label} ${fmtMoney(billed)} billed`;
+    const gap = projected - billed;
+    return gap > 0.005
+      ? `${label} ${fmtMoney(billed)} billed + ${fmtMoney(gap)} projected`
+      : `${label} ${fmtMoney(billed)} billed, projection off`;
+  });
+  const more = months.length - shown.length;
+  return shown.join(" · ") + (more > 0 ? ` · ${more} more month${more === 1 ? "" : "s"}` : "");
+}
+
+/**
+ * Link a recurring withdrawal to the vendors whose real bills are the same
+ * money. Anything linked here is netted out of the projection month by month,
+ * so the near term runs on the actual bills and the projection carries the tail
+ * — no more un-ticking the same bill every time Bill.com issues it.
+ */
+function VendorCoverage({
+  selected,
+  vendors,
+  onChange,
+}: {
+  selected: string[];
+  vendors: VendorSummary[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const keys = new Set(selected.map(vendorKey));
+  const toggle = (vendor: string) =>
+    onChange(
+      keys.has(vendorKey(vendor))
+        ? selected.filter((v) => vendorKey(v) !== vendorKey(vendor))
+        : [...selected, vendor],
+    );
+  const list = q.trim()
+    ? vendors.filter((v) => v.vendor.toLowerCase().includes(q.trim().toLowerCase()))
+    : vendors;
+
+  return (
+    <div className="ow-link">
+      <span className="ow-link-label">Covered by bills from</span>
+      {selected.length === 0 && !open && (
+        <span className="muted" style={{ fontSize: 12 }}>
+          {vendors.length === 0 ? "no open bills synced" : "nothing linked — this line projects in full"}
+        </span>
+      )}
+      {selected.map((vendor) => (
+        <button key={vendor} className="chip info ow-chip" onClick={() => toggle(vendor)} title="Unlink">
+          {vendor} <span aria-hidden>✕</span>
+        </button>
+      ))}
+      {vendors.length > 0 && (
+        <button className="btn sm ghost" onClick={() => setOpen((v) => !v)}>
+          {open ? "Done" : "+ Link vendor"}
+        </button>
+      )}
+      {open && (
+        <div className="ow-link-list">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search vendor" />
+          <div className="ow-link-options">
+            {list.map((v) => (
+              <label key={v.vendor}>
+                <input type="checkbox" checked={keys.has(vendorKey(v.vendor))} onChange={() => toggle(v.vendor)} />
+                <span className="ow-link-vendor">{v.vendor}</span>
+                <span className="muted">
+                  {v.bills} bill{v.bills === 1 ? "" : "s"} · {fmtMoney(v.total)}
+                </span>
+              </label>
+            ))}
+            {list.length === 0 && <div className="muted" style={{ fontSize: 12 }}>No vendor matches.</div>}
+          </div>
+        </div>
       )}
     </div>
   );

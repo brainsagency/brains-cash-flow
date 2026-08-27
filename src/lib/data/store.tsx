@@ -39,6 +39,7 @@ import {
 } from "@engine/index.js";
 import { todayISO } from "@/lib/format.js";
 import { autoApplyBankBalances } from "@/lib/integrations/plaid/apply.js";
+import { applyBillCoverage } from "@/lib/integrations/billdotcom/coverage.js";
 import { gateReimbursementReceipts } from "@/lib/integrations/qbo/reimbursement.js";
 import {
   captureSnapshot,
@@ -679,6 +680,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Per-item adjustments apply to both: excluded items drop from the forecast;
   // a date override moves the cash date (collection for AR, payment for AP),
   // clamped to the anchor so a past date can't fall out of the horizon.
+  //
+  // Finally, the AP list — as adjusted, so an un-ticked bill doesn't count —
+  // is netted out of any recurring withdrawal linked to those vendors, so a
+  // projection and the real bill it was anticipating never both charge the
+  // same month.
   const mergedInput = useMemo<ForecastInput>(() => {
     // Suppress the projected MC reimbursement receipt for periods already covered
     // by a real reimbursement invoice (the invoice, kept as AR, takes over).
@@ -713,13 +719,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return [e];
       });
 
+    const apEvents = applyAdjustments(hasAp ? syncedAp! : [], 0);
     return {
       ...base,
-      events: [
-        ...events,
-        ...applyAdjustments(hasAr ? syncedAr : [], arLag),
-        ...applyAdjustments(hasAp ? syncedAp : [], 0),
-      ],
+      recurring: applyBillCoverage(base.recurring ?? [], apEvents),
+      events: [...events, ...applyAdjustments(hasAr ? syncedAr : [], arLag), ...apEvents],
     };
   }, [taxBase, state.adjustments, syncedAr, syncedAp, reimbursedThrough]);
 

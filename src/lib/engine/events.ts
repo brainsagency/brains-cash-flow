@@ -14,6 +14,9 @@ import type { CashEvent, PipelineDeal, RecurringItem } from "./types.js";
  * - biweekly: every 14 days
  * - semimonthly: the 1st and 15th of each month (payroll convention)
  * - monthly: same day-of-month each month (clamped for short months)
+ *
+ * `coveredMonths` is netted out afterwards, so an occurrence the real bills
+ * already cover doesn't count twice.
  */
 export function expandRecurring(item: RecurringItem, horizonEnd: ISODate): CashEvent[] {
   const last = item.endDate && item.endDate < horizonEnd ? item.endDate : horizonEnd;
@@ -32,7 +35,7 @@ export function expandRecurring(item: RecurringItem, horizonEnd: ISODate): CashE
       }
       monthCursor = addMonths(monthCursor, 1);
     }
-    return events;
+    return applyCoverage(events, item);
   }
 
   let date: ISODate = item.startDate;
@@ -42,7 +45,35 @@ export function expandRecurring(item: RecurringItem, horizonEnd: ISODate): CashE
     date = advance(date, item.frequency);
     if (++guard > 10_000) break; // safety valve against a bad frequency/date
   }
-  return events;
+  return applyCoverage(events, item);
+}
+
+/** Below this, a covered occurrence is nothing but float dust — drop it. */
+const COVERAGE_EPSILON = 0.005;
+
+/**
+ * Net each month's `coveredMonths` deduction out of that month's occurrences,
+ * earliest first, and drop the ones it consumes entirely. Spreading across
+ * occurrences (rather than per-occurrence) keeps the arithmetic right for a
+ * semi-monthly item whose real bills arrive as a single monthly total.
+ */
+function applyCoverage(events: CashEvent[], item: RecurringItem): CashEvent[] {
+  if (!item.coveredMonths) return events;
+  const remaining: Record<string, number> = { ...item.coveredMonths };
+  const out: CashEvent[] = [];
+  for (const event of events) {
+    const month = event.date.slice(0, 7);
+    const left = remaining[month];
+    if (!left || left <= 0) {
+      out.push(event);
+      continue;
+    }
+    const taken = Math.min(left, event.amount);
+    remaining[month] = left - taken;
+    const amount = event.amount - taken;
+    if (amount > COVERAGE_EPSILON) out.push({ ...event, amount });
+  }
+  return out;
 }
 
 function advance(date: ISODate, freq: RecurringItem["frequency"]): ISODate {

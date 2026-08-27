@@ -1261,3 +1261,65 @@ input.cell-date:disabled {
   font-weight: 700;
   color: var(--text);
 }
+
+/* Other Withdrawals: the "these bills are this same money" link + its readout. */
+.ow-coverage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ow-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px 2px;
+}
+.ow-link-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ow-chip {
+  background: none;
+  cursor: pointer;
+}
+.ow-link-list {
+  flex-basis: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg-elev);
+  max-width: 420px;
+}
+.ow-link-list input[type="text"],
+.ow-link-list input:not([type]) {
+  width: 100%;
+  margin-bottom: 6px;
+}
+.ow-link-options {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ow-link-options label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+.ow-link-vendor {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

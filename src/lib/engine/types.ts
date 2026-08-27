@@ -122,6 +122,27 @@ export interface RecurringItem {
    * month closes. Applied to `monthly`-frequency items only.
    */
   overrides?: Record<string, number>;
+  /**
+   * Names of the vendors whose real bills are this same money. A projection
+   * like "Brandy monthly payment" is anticipating bills that eventually show up
+   * in the AP feed for real; once they do, both would count. Linking the
+   * vendors here lets the store net the real bills out of the projection (see
+   * `coveredMonths`). The pure engine ignores this field — resolution happens
+   * in the client store, like the staff roster.
+   */
+  coveredByVendors?: string[];
+  /**
+   * Per-month amounts already accounted for elsewhere (real bills in the
+   * forecast), keyed by calendar month ("YYYY-MM"). Each month's occurrences
+   * are reduced, in date order, until the deduction is used up; an occurrence
+   * reduced to nothing drops out entirely. So a fully-billed month contributes
+   * only the real bills, a partly-billed month has the projection top up the
+   * gap, and an unbilled month projects in full.
+   *
+   * Derived, not authored: the store recomputes this from the AP feed on every
+   * sync (see `applyBillCoverage`). Don't persist it in the manual layer.
+   */
+  coveredMonths?: Record<string, number>;
 }
 
 /**
