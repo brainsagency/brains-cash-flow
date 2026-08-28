@@ -9,9 +9,9 @@
  * client churn, pipeline sensitivity, and collection timing.
  */
 
-import { addDays, addMonths, type ISODate } from "./dates.js";
+import { addDays, addMonths, isValidISODate, type ISODate } from "./dates.js";
 import { forecast } from "./forecast.js";
-import type { CashEvent, ForecastInput, ForecastResult, RecurringItem } from "./types.js";
+import type { Billing, CashEvent, ForecastInput, ForecastResult, RecurringItem } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Levers
@@ -108,17 +108,45 @@ export interface LayoffGroupLever {
   label?: string;
 }
 
-/** Add revenue — a one-off lump on a date, or a recurring monthly amount. */
+/**
+ * Add revenue — a one-off lump, a recurring monthly amount, or an installment
+ * schedule. The third is how project work actually bills: a signed number
+ * landing in three or four uneven payments over several months, which neither
+ * a lump on one date nor a flat retainer describes.
+ */
 export interface AddRevenueLever {
   kind: "addRevenue";
-  mode: "oneoff" | "recurring";
+  mode: "oneoff" | "recurring" | "schedule";
+  /**
+   * The lump (oneoff) or the per-month amount (recurring). Ignored in
+   * `schedule` mode, where the installments are authoritative — read the
+   * booking value with `addRevenueTotal` rather than this field.
+   */
   amount: number;
   /** One-off receipt date. */
   date?: ISODate;
   /** Recurring start / optional end. */
   startDate?: ISODate;
   endDate?: ISODate;
+  /**
+   * Installment schedule (`schedule` mode): each entry lands as its own receipt
+   * on its own date, so an uneven 40/30/30 split models exactly. Mirrors
+   * `PipelineDeal.billings`, which is how real deals carry their schedule.
+   */
+  billings?: Billing[];
   label?: string;
+}
+
+/**
+ * What the lever is worth in total: the booking value for a schedule, the lump
+ * for a one-off, the per-month figure for a retainer. Summaries should use this
+ * rather than reading `amount`, which a schedule leaves unset.
+ */
+export function addRevenueTotal(lever: AddRevenueLever): number {
+  if (lever.mode === "schedule") {
+    return (lever.billings ?? []).reduce((sum, b) => sum + (b.amount || 0), 0);
+  }
+  return lever.amount;
 }
 
 export type Lever =
@@ -317,7 +345,20 @@ function applyLayoffGroup(input: ForecastInput, lever: LayoffGroupLever): void {
 
 function applyAddRevenue(input: ForecastInput, lever: AddRevenueLever): void {
   const memo = lever.label || "Added revenue";
-  if (lever.mode === "oneoff" && lever.date) {
+  if (lever.mode === "schedule") {
+    // One receipt per installment, numbered so the drill-down reads as a
+    // schedule rather than as several unrelated receipts with the same name.
+    // Half-typed dates are skipped, not fed to the period math.
+    const billings = (lever.billings ?? []).filter((b) => isValidISODate(b.date));
+    billings.forEach((b, i) => {
+      input.events!.push({
+        category: "pipeline",
+        amount: b.amount,
+        date: b.date,
+        memo: billings.length > 1 ? `${memo} (${i + 1}/${billings.length})` : memo,
+      });
+    });
+  } else if (lever.mode === "oneoff" && lever.date) {
     input.events!.push({ category: "pipeline", amount: lever.amount, date: lever.date, memo });
   } else if (lever.mode === "recurring" && lever.startDate) {
     input.recurring!.push({

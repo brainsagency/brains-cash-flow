@@ -1665,3 +1665,26 @@ input.cell-date:disabled {
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
+
+/* ---- Scenario builder: a revenue lever's installment schedule ------------- */
+.lever-billings {
+  margin-top: 4px;
+}
+.lever-billing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 160px) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.lever-billing-row.head {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+/* Booking value is derived from the installments — shown, not typed. */
+.lever-total {
+  padding: 7px 0;
+  font-size: 15px;
+  font-weight: 600;
+}

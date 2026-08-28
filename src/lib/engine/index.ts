@@ -18,6 +18,7 @@ export {
   computeRunwayMonths,
 } from "./forecast.js";
 export {
+  addRevenueTotal,
   applyLever,
   applyScenario,
   runScenario,

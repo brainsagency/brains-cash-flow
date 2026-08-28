@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Lever, Scenario, StaffMember } from "@engine/index.js";
+import { addMonths, addRevenueTotal, type Billing, type Lever, type Scenario, type StaffMember } from "@engine/index.js";
 import { fmtMoney } from "@/lib/format.js";
 import { MoneyInput } from "@/components/fields.js";
 
@@ -9,7 +9,8 @@ import { MoneyInput } from "@/components/fields.js";
  * Create / edit a scenario as a stack of levers. Headline levers:
  *  - Layoff group: pick real roster people; pay stops on the date and severance
  *    = N months of their pay (auto).
- *  - Add revenue: a one-off lump or a recurring monthly amount.
+ *  - Add revenue: a one-off lump, a recurring monthly amount, or an
+ *    installment schedule (how project work actually bills).
  *  - Hire: add a role's comp from a start date.
  * Combine any number of levers in one scenario.
  */
@@ -230,31 +231,67 @@ function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMem
   }
 
   if (lever.kind === "addRevenue") {
+    const billings = lever.billings ?? [];
+    const setBillings = (next: Billing[]) => onChange({ billings: next } as Partial<Lever>);
+    // Switching into schedule mode seeds the first installment from whatever
+    // was already typed, so the amount and date aren't silently thrown away.
+    const setMode = (mode: string) =>
+      onChange(
+        mode === "schedule" && billings.length === 0
+          ? ({
+              mode,
+              billings: [{ date: lever.date ?? lever.startDate ?? "", amount: lever.amount || 0 }],
+            } as Partial<Lever>)
+          : ({ mode } as Partial<Lever>),
+      );
+    // A new row lands a month after the last one, same amount — so a four-part
+    // schedule is three clicks, then edit whichever installments differ.
+    const addBilling = () => {
+      const last = billings[billings.length - 1];
+      setBillings([
+        ...billings,
+        last?.date
+          ? { date: addMonths(last.date, 1), amount: last.amount }
+          : { date: lever.startDate ?? lever.date ?? "", amount: 0 },
+      ]);
+    };
+
     return (
       <>
         <div className="row" style={{ gap: 12, marginBottom: 10 }}>
-          <div className="field" style={{ maxWidth: 160 }}>
+          <div className="field" style={{ maxWidth: 170 }}>
             <label>Type</label>
-            <select value={lever.mode} onChange={(e) => onChange({ mode: e.target.value } as Partial<Lever>)}>
+            <select value={lever.mode} onChange={(e) => setMode(e.target.value)}>
               <option value="recurring">Recurring / mo</option>
               <option value="oneoff">One-off lump</option>
+              <option value="schedule">Billing schedule</option>
             </select>
           </div>
-          <div className="field" style={{ maxWidth: 160 }}>
-            <label>{lever.mode === "recurring" ? "Amount / month" : "Amount"}</label>
-            <MoneyInput value={lever.amount} step="1000" onChange={(n) => onChange({ amount: n } as Partial<Lever>)} />
-          </div>
+          {lever.mode === "schedule" ? (
+            <div className="field" style={{ maxWidth: 170 }}>
+              <label>Booking value</label>
+              <div className="lever-total mono">{fmtMoney(addRevenueTotal(lever))}</div>
+            </div>
+          ) : (
+            <div className="field" style={{ maxWidth: 160 }}>
+              <label>{lever.mode === "recurring" ? "Amount / month" : "Amount"}</label>
+              <MoneyInput value={lever.amount} step="1000" onChange={(n) => onChange({ amount: n } as Partial<Lever>)} />
+            </div>
+          )}
           <div className="field" style={{ flex: 1 }}>
             <label>Label</label>
             <input value={lever.label ?? ""} placeholder="e.g. New retainer" onChange={(e) => onChange({ label: e.target.value } as Partial<Lever>)} />
           </div>
         </div>
-        {lever.mode === "oneoff" ? (
+
+        {lever.mode === "oneoff" && (
           <div className="field" style={{ maxWidth: 180 }}>
             <label>Date</label>
             <input type="date" value={lever.date ?? ""} onChange={(e) => onChange({ date: e.target.value } as Partial<Lever>)} />
           </div>
-        ) : (
+        )}
+
+        {lever.mode === "recurring" && (
           <div className="row" style={{ gap: 12 }}>
             <div className="field" style={{ maxWidth: 180 }}>
               <label>Start</label>
@@ -263,6 +300,41 @@ function LeverEditor({ lever, staff, onChange }: { lever: Lever; staff: StaffMem
             <div className="field" style={{ maxWidth: 180 }}>
               <label>End (optional)</label>
               <input type="date" value={lever.endDate ?? ""} onChange={(e) => onChange({ endDate: e.target.value || undefined } as Partial<Lever>)} />
+            </div>
+          </div>
+        )}
+
+        {lever.mode === "schedule" && (
+          <div className="lever-billings">
+            {billings.length > 0 && (
+              <div className="lever-billing-row head">
+                <span>Billing date</span>
+                <span>Amount</span>
+                <span />
+              </div>
+            )}
+            {billings.map((b, bi) => (
+              <div className="lever-billing-row" key={bi}>
+                <input
+                  type="date"
+                  value={b.date}
+                  onChange={(e) => setBillings(billings.map((x, xi) => (xi === bi ? { ...x, date: e.target.value } : x)))}
+                />
+                <MoneyInput
+                  value={b.amount}
+                  step="1000"
+                  onChange={(n) => setBillings(billings.map((x, xi) => (xi === bi ? { ...x, amount: n } : x)))}
+                />
+                <button className="btn sm ghost" onClick={() => setBillings(billings.filter((_, xi) => xi !== bi))} title="Remove billing">✕</button>
+              </div>
+            ))}
+            <div className="row" style={{ gap: 10, marginTop: 6 }}>
+              <button className="btn sm" onClick={addBilling}>+ Add billing</button>
+              <span className="muted">
+                {billings.length === 0
+                  ? "No installments yet — this lever adds nothing until one is set."
+                  : `${billings.length} installment${billings.length === 1 ? "" : "s"} · each lands as its own receipt`}
+              </span>
             </div>
           </div>
         )}

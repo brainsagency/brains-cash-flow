@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { forecast } from "./forecast.js";
 import {
+  addRevenueTotal,
   applyScenario,
   compareScenarios,
   forkScenario,
@@ -206,6 +207,78 @@ describe("scenario levers", () => {
       levers: [{ kind: "addRevenue", mode: "oneoff", amount: 100_000, date: "2026-08-15", label: "New logo" }],
     });
     expect(finalEnding(withRev)).toBeCloseTo(finalEnding(baseline) + 100_000, 5);
+  });
+
+  it("addRevenue (schedule) lands one receipt per installment, on its own date", () => {
+    const scn: Scenario = {
+      id: "s",
+      name: "Project win",
+      levers: [
+        {
+          kind: "addRevenue",
+          mode: "schedule",
+          amount: 0,
+          label: "Rebrand project",
+          billings: [
+            { date: "2026-08-15", amount: 160_000 },
+            { date: "2026-09-15", amount: 120_000 },
+            { date: "2026-10-15", amount: 120_000 },
+          ],
+        },
+      ],
+    };
+    const applied = applyScenario(base(), scn);
+    const added = (applied.events ?? []).filter((e) => e.memo?.startsWith("Rebrand project"));
+    expect(added.map((e) => [e.date, e.amount])).toEqual([
+      ["2026-08-15", 160_000],
+      ["2026-09-15", 120_000],
+      ["2026-10-15", 120_000],
+    ]);
+    // Numbered so the drill-down reads as one schedule, not three receipts.
+    expect(added.map((e) => e.memo)).toEqual([
+      "Rebrand project (1/3)",
+      "Rebrand project (2/3)",
+      "Rebrand project (3/3)",
+    ]);
+    // Ending cash rises by the booking value, not by `amount` (which is unset).
+    expect(finalEnding(runScenario(base(), scn))).toBeCloseTo(finalEnding(baseline) + 400_000, 5);
+  });
+
+  it("addRevenue (schedule) skips half-typed dates and drops the numbering when alone", () => {
+    const scn: Scenario = {
+      id: "s",
+      name: "One billing",
+      levers: [
+        {
+          kind: "addRevenue",
+          mode: "schedule",
+          amount: 999,
+          label: "Deposit",
+          billings: [
+            { date: "2026-08-1", amount: 50_000 }, // mid-typing
+            { date: "2026-09-01", amount: 75_000 },
+          ],
+        },
+      ],
+    };
+    const added = (applyScenario(base(), scn).events ?? []).filter((e) => e.memo?.startsWith("Deposit"));
+    expect(added).toHaveLength(1);
+    expect(added[0]!.memo).toBe("Deposit");
+    expect(added[0]!.amount).toBe(75_000);
+  });
+
+  it("addRevenueTotal reads the booking value per mode", () => {
+    expect(addRevenueTotal({ kind: "addRevenue", mode: "oneoff", amount: 100_000 })).toBe(100_000);
+    expect(addRevenueTotal({ kind: "addRevenue", mode: "recurring", amount: 25_000 })).toBe(25_000);
+    expect(
+      addRevenueTotal({
+        kind: "addRevenue",
+        mode: "schedule",
+        amount: 0,
+        billings: [{ date: "2026-08-01", amount: 10 }, { date: "2026-09-01", amount: 32 }],
+      }),
+    ).toBe(42);
+    expect(addRevenueTotal({ kind: "addRevenue", mode: "schedule", amount: 5 })).toBe(0);
   });
 
   it("addRevenue (recurring) adds monthly receipts over the horizon", () => {

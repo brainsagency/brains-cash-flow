@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { ForecastResult, Lever, Scenario } from "@engine/index.js";
+import { addRevenueTotal, type ForecastResult, type Lever, type Scenario } from "@engine/index.js";
 import { fmtMoney, fmtMonths } from "@/lib/format.js";
 
 export interface ScenarioView {
@@ -146,8 +146,15 @@ function leverLabel(l: Lever): string {
       const extras = [hasSev && "sev", hasVac && "vac"].filter(Boolean).join("+");
       return `– Lay off ${l.staffIds.length}${extras ? ` (+${extras})` : ""}`;
     }
-    case "addRevenue":
-      return `+ ${l.label || "Revenue"} ${fmtMoney(l.amount)}${l.mode === "recurring" ? "/mo" : ""}`;
+    case "addRevenue": {
+      const suffix =
+        l.mode === "recurring"
+          ? "/mo"
+          : l.mode === "schedule"
+            ? ` over ${(l.billings ?? []).length} billings`
+            : "";
+      return `+ ${l.label || "Revenue"} ${fmtMoney(addRevenueTotal(l))}${suffix}`;
+    }
     case "churn":
       return `– Churn ${l.client}`;
     case "pipelineSensitivity":
