@@ -109,6 +109,11 @@ export function OperatingExpenses() {
   const anchorPrefix = anchor.slice(0, 7);
   const [editSections, setEditSections] = useState<Set<Section>>(new Set());
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
+  const [showPastOneoffs, setShowPastOneoffs] = useState(false);
+  // Ids that were already in the past when the one-time section entered edit
+  // mode. Frozen so a row doesn't hop between Upcoming and Past mid-keystroke
+  // while its date is being retyped; recomputed the next time edit mode opens.
+  const [frozenPastIds, setFrozenPastIds] = useState<Set<string> | null>(null);
 
   const isEditing = (s: Section) => editSections.has(s);
   const toggleEdit = (s: Section) =>
@@ -128,7 +133,24 @@ export function OperatingExpenses() {
   // a row doesn't jump to a new position (closing the native date picker) the
   // moment you change its date — that read as "can't edit the date".
   const oneoffEditing = isEditing("oneoff");
-  const oneoffs = oneoffEditing ? oneoffsAll : [...oneoffsAll].sort((a, b) => a.date.localeCompare(b.date));
+  const oneoffSorted = oneoffEditing ? oneoffsAll : [...oneoffsAll].sort((a, b) => a.date.localeCompare(b.date));
+  // Already-paid one-timers clutter the list they're no longer part of, so they
+  // fold away into their own section. While editing, membership is frozen (see
+  // frozenPastIds) for the same reason the sort is.
+  const isPast = (e: CashEvent) =>
+    frozenPastIds ? frozenPastIds.has(e.id ?? "") : e.date < anchor;
+  const pastOneoffs = oneoffSorted.filter(isPast);
+  const oneoffs = oneoffSorted.filter((e) => !isPast(e));
+
+  const beginOneoffEdit = () => {
+    setFrozenPastIds(new Set(oneoffsAll.filter((e) => e.date < anchor).map((e) => e.id ?? "")));
+    beginEdit("oneoff");
+  };
+  const toggleOneoffEdit = () => {
+    if (!oneoffEditing) return beginOneoffEdit();
+    setFrozenPastIds(null);
+    toggleEdit("oneoff");
+  };
 
   const updateItem = (id: string | undefined, patch: Partial<RecurringItem>) =>
     setInput((prev) => ({ ...prev, recurring: (prev.recurring ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
@@ -172,6 +194,7 @@ export function OperatingExpenses() {
   const recurringMo = monthlySum + otherMo;
   const total = recurringMo + cardsBudget + freelanceBudget;
   const oneoffTotal = oneoffs.reduce((s, e) => s + e.amount, 0);
+  const pastOneoffTotal = pastOneoffs.reduce((s, e) => s + e.amount, 0);
 
   const chip = (label: string, val: string) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -405,39 +428,71 @@ export function OperatingExpenses() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Eyebrow color="var(--text)">One-time expenses</Eyebrow>
-            {oneoffs.length > 0 && <span style={{ fontSize: 13, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{money0(oneoffTotal)} total</span>}
+            {oneoffs.length > 0 && <span style={{ fontSize: 13, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{money0(oneoffTotal)} upcoming</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <EditButton editing={oneoffEditing} onClick={() => toggleEdit("oneoff")} />
-            <AddButton label="Add one-time" onClick={() => { beginEdit("oneoff"); addOneoff(); }} />
+            <EditButton editing={oneoffEditing} onClick={toggleOneoffEdit} />
+            <AddButton label="Add one-time" onClick={() => { beginOneoffEdit(); addOneoff(); }} />
           </div>
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
           Ad-hoc costs paid directly (a conference, a one-off purchase) that aren&apos;t on a card or in Bill.com.
         </div>
         {oneoffs.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>None scheduled.</div>}
-        {oneoffs.map((e) => (
-          <div key={e.id} style={{ display: "grid", gridTemplateColumns: oneoffEditing ? "minmax(0,1fr) 150px 128px 34px" : "minmax(0,1fr) 128px", alignItems: "center", gap: 14, padding: "12px 4px", borderBottom: "1px solid rgba(19,19,19,0.05)" }}>
-            {oneoffEditing ? (
-              <input value={e.memo ?? ""} placeholder="e.g. SXSW conference" onChange={(ev) => updateEvent(e.id, { memo: ev.target.value })} style={rowNameInput} />
-            ) : (
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{e.memo || "Unnamed"}</div>
-                <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>{fmtShortDate(e.date)}</div>
+        {oneoffs.map((e) => oneoffRow(e))}
+
+        {pastOneoffs.length > 0 && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <button
+              onClick={() => setShowPastOneoffs((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", background: "transparent", border: "none", padding: "2px 4px", cursor: "pointer", color: "var(--text-dim)", textAlign: "left" }}
+            >
+              <span style={{ display: "inline-flex", transform: showPastOneoffs ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+              <span style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                Past expenses
+              </span>
+              <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                {pastOneoffs.length} · {money0(pastOneoffTotal)}
+              </span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 12 }}>{showPastOneoffs ? "Hide" : "Show"}</span>
+            </button>
+            {showPastOneoffs && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginBottom: 6 }}>
+                  Dated before {fmtShortDate(anchor)} — already paid, kept for the record. Still counted if they fall inside the current forecast period.
+                </div>
+                {pastOneoffs.map((e) => oneoffRow(e, true))}
               </div>
             )}
-            {oneoffEditing && <input type="date" value={e.date} onChange={(ev) => updateEvent(e.id, { date: ev.target.value })} style={boxInput} />}
-            {oneoffEditing ? (
-              <MoneyInput value={e.amount} step="0.01" onChange={(n) => updateEvent(e.id, { amount: n })} />
-            ) : (
-              <div style={{ textAlign: "right", fontSize: 14.5, fontVariantNumeric: "tabular-nums" }}>{money2(e.amount)}</div>
-            )}
-            {oneoffEditing && <button onClick={() => removeEvent(e.id)} title="Remove" style={xBtn}>✕</button>}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
+
+  /** One row of the one-time list; `muted` dims rows in the Past section. */
+  function oneoffRow(e: CashEvent, muted = false) {
+    return (
+      <div key={e.id} style={{ display: "grid", gridTemplateColumns: oneoffEditing ? "minmax(0,1fr) 150px 128px 34px" : "minmax(0,1fr) 128px", alignItems: "center", gap: 14, padding: "12px 4px", borderBottom: "1px solid rgba(19,19,19,0.05)", opacity: muted && !oneoffEditing ? 0.65 : 1 }}>
+        {oneoffEditing ? (
+          <input value={e.memo ?? ""} placeholder="e.g. SXSW conference" onChange={(ev) => updateEvent(e.id, { memo: ev.target.value })} style={rowNameInput} />
+        ) : (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{e.memo || "Unnamed"}</div>
+            <div style={{ fontFamily: "var(--font-cond)", fontWeight: 700, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 2 }}>{fmtShortDate(e.date)}</div>
+          </div>
+        )}
+        {oneoffEditing && <input type="date" value={e.date} onChange={(ev) => updateEvent(e.id, { date: ev.target.value })} style={boxInput} />}
+        {oneoffEditing ? (
+          <MoneyInput value={e.amount} step="0.01" onChange={(n) => updateEvent(e.id, { amount: n })} />
+        ) : (
+          <div style={{ textAlign: "right", fontSize: 14.5, fontVariantNumeric: "tabular-nums" }}>{money2(e.amount)}</div>
+        )}
+        {oneoffEditing && <button onClick={() => removeEvent(e.id)} title="Remove" style={xBtn}>✕</button>}
+      </div>
+    );
+  }
 
   function toggleCard(id: string) {
     setOpenCards((prev) => {
