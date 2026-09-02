@@ -208,104 +208,106 @@ export function StaffRoster() {
 
       {editing && selected && (
         <div className="split-editor">
-          <span className="split-eyebrow">Editing</span>
+          <div className="split-editor-inner">
+            <span className="split-eyebrow">Editing</span>
 
-          <label className="split-field">
-            Full name
-            <input
-              value={selected.name}
-              placeholder="Full name"
-              onChange={(e) => update(selected.id, { name: e.target.value })}
-            />
-          </label>
-
-          <div className="split-pair">
             <label className="split-field">
-              Annual salary
-              <MoneyInput value={selected.annualSalary} step="0.01" onChange={(n) => update(selected.id, { annualSalary: n })} />
-            </label>
-            <label className="split-field">
-              Cost center
+              Full name
               <input
-                value={selected.costCenter ?? ""}
-                placeholder="e.g. Creative"
-                onChange={(e) => update(selected.id, { costCenter: e.target.value || undefined })}
+                value={selected.name}
+                placeholder="Full name"
+                onChange={(e) => update(selected.id, { name: e.target.value })}
               />
             </label>
-          </div>
 
-          <label className="split-field">
-            Hire date
-            <input type="date" value={selected.doh} onChange={(e) => update(selected.id, { doh: e.target.value })} />
-          </label>
-
-          <div className="split-group">
-            <span className="split-eyebrow">Scheduled raise</span>
             <div className="split-pair">
               <label className="split-field">
-                Effective
+                Annual salary
+                <MoneyInput value={selected.annualSalary} step="0.01" onChange={(n) => update(selected.id, { annualSalary: n })} />
+              </label>
+              <label className="split-field">
+                Cost center
+                <input
+                  value={selected.costCenter ?? ""}
+                  placeholder="e.g. Creative"
+                  onChange={(e) => update(selected.id, { costCenter: e.target.value || undefined })}
+                />
+              </label>
+            </div>
+
+            <label className="split-field">
+              Hire date
+              <input type="date" value={selected.doh} onChange={(e) => update(selected.id, { doh: e.target.value })} />
+            </label>
+
+            <div className="split-group">
+              <span className="split-eyebrow">Scheduled raise</span>
+              <div className="split-pair">
+                <label className="split-field">
+                  Effective
+                  <input
+                    type="date"
+                    value={selected.salaryChangeDate ?? ""}
+                    onChange={(e) => update(selected.id, { salaryChangeDate: e.target.value || undefined })}
+                  />
+                </label>
+                <label className="split-field">
+                  New salary
+                  <MoneyInput
+                    value={selected.newSalary ?? 0}
+                    step="0.01"
+                    onChange={(n) => update(selected.id, { newSalary: n || undefined })}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="split-group">
+              <span className="split-eyebrow">Departure</span>
+              <label className="split-field">
+                Term date
                 <input
                   type="date"
-                  value={selected.salaryChangeDate ?? ""}
-                  onChange={(e) => update(selected.id, { salaryChangeDate: e.target.value || undefined })}
+                  value={selected.dot ?? ""}
+                  onChange={(e) => update(selected.id, { dot: e.target.value || undefined })}
                 />
               </label>
+              <div className="split-pair">
+                <label className="split-field">
+                  Severance
+                  <MoneyInput
+                    value={selected.severance ?? 0}
+                    step="0.01"
+                    onChange={(n) => update(selected.id, { severance: n || undefined })}
+                  />
+                </label>
+                <label className="split-field">
+                  Paid as
+                  <select
+                    value={selected.severancePayout ?? "lump"}
+                    onChange={(e) => update(selected.id, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}
+                  >
+                    <option value="lump">Lump sum</option>
+                    <option value="payroll">On payroll</option>
+                  </select>
+                </label>
+              </div>
               <label className="split-field">
-                New salary
+                Vacation / PTO payout
                 <MoneyInput
-                  value={selected.newSalary ?? 0}
+                  value={selected.vacationPayout ?? 0}
                   step="0.01"
-                  onChange={(n) => update(selected.id, { newSalary: n || undefined })}
+                  onChange={(n) => update(selected.id, { vacationPayout: n || undefined })}
                 />
               </label>
             </div>
+
+            <p className="split-hint">{hintFor(selected, anchor, load)}</p>
+
+            <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
+              Remove person
+            </button>
           </div>
-
-          <div className="split-group">
-            <span className="split-eyebrow">Departure</span>
-            <label className="split-field">
-              Term date
-              <input
-                type="date"
-                value={selected.dot ?? ""}
-                onChange={(e) => update(selected.id, { dot: e.target.value || undefined })}
-              />
-            </label>
-            <div className="split-pair">
-              <label className="split-field">
-                Severance
-                <MoneyInput
-                  value={selected.severance ?? 0}
-                  step="0.01"
-                  onChange={(n) => update(selected.id, { severance: n || undefined })}
-                />
-              </label>
-              <label className="split-field">
-                Paid as
-                <select
-                  value={selected.severancePayout ?? "lump"}
-                  onChange={(e) => update(selected.id, { severancePayout: e.target.value === "payroll" ? "payroll" : undefined })}
-                >
-                  <option value="lump">Lump sum</option>
-                  <option value="payroll">On payroll</option>
-                </select>
-              </label>
-            </div>
-            <label className="split-field">
-              Vacation / PTO payout
-              <MoneyInput
-                value={selected.vacationPayout ?? 0}
-                step="0.01"
-                onChange={(n) => update(selected.id, { vacationPayout: n || undefined })}
-              />
-            </label>
-          </div>
-
-          <p className="split-hint">{hintFor(selected, anchor, load)}</p>
-
-          <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
-            Remove person
-          </button>
         </div>
       )}
     </div>

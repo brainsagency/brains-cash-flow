@@ -235,85 +235,87 @@ export function OtherWithdrawals() {
 
       {editing && selected && (
         <div className="split-editor">
-          <span className="split-eyebrow">Editing</span>
+          <div className="split-editor-inner">
+            <span className="split-eyebrow">Editing</span>
 
-          <label className="split-field">
-            Description
-            <input
-              value={selected.memo}
-              placeholder={selected.direction === "in" ? "e.g. MC payroll reimbursement" : "e.g. Owner distribution"}
-              onChange={(e) => update(selected.id, { memo: e.target.value })}
-            />
-          </label>
-
-          <label className="split-field">
-            {selected.repeats === "once" ? "Amount" : "Amount per occurrence"}
-            <MoneyInput value={selected.amount} onChange={(n) => update(selected.id, { amount: n })} />
-          </label>
-
-          <div className="split-field">
-            <span>Direction</span>
-            <div className="split-toggle">
-              {(["out", "in"] as Dir[]).map((d) => (
-                <button
-                  key={d}
-                  className={selected.direction === d ? "on" : ""}
-                  style={selected.direction === d ? { background: HUE[d], borderColor: HUE[d] } : undefined}
-                  onClick={() => update(selected.id, { direction: d })}
-                >
-                  {d === "out" ? "Money out" : "Money in"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="split-field">
-            Repeats
-            <select
-              value={selected.repeats}
-              onChange={(e) => update(selected.id, { repeats: e.target.value as Repeats })}
-            >
-              {REPEATS.map((o) => (
-                <option key={o.v} value={o.v}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <div className="split-pair">
             <label className="split-field">
-              {selected.repeats === "once" ? (selected.direction === "in" ? "Funds in" : "Funds out") : "Starting"}
+              Description
               <input
-                type="date"
-                value={selected.startDate}
-                onChange={(e) => update(selected.id, { startDate: e.target.value })}
+                value={selected.memo}
+                placeholder={selected.direction === "in" ? "e.g. MC payroll reimbursement" : "e.g. Owner distribution"}
+                onChange={(e) => update(selected.id, { memo: e.target.value })}
               />
             </label>
-            {selected.repeats !== "once" && (
+
+            <label className="split-field">
+              {selected.repeats === "once" ? "Amount" : "Amount per occurrence"}
+              <MoneyInput value={selected.amount} onChange={(n) => update(selected.id, { amount: n })} />
+            </label>
+
+            <div className="split-field">
+              <span>Direction</span>
+              <div className="split-toggle">
+                {(["out", "in"] as Dir[]).map((d) => (
+                  <button
+                    key={d}
+                    className={selected.direction === d ? "on" : ""}
+                    style={selected.direction === d ? { background: HUE[d], borderColor: HUE[d] } : undefined}
+                    onClick={() => update(selected.id, { direction: d })}
+                  >
+                    {d === "out" ? "Money out" : "Money in"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="split-field">
+              Repeats
+              <select
+                value={selected.repeats}
+                onChange={(e) => update(selected.id, { repeats: e.target.value as Repeats })}
+              >
+                {REPEATS.map((o) => (
+                  <option key={o.v} value={o.v}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="split-pair">
               <label className="split-field">
-                Ends (optional)
+                {selected.repeats === "once" ? (selected.direction === "in" ? "Funds in" : "Funds out") : "Starting"}
                 <input
                   type="date"
-                  min={selected.startDate}
-                  value={selected.endDate ?? ""}
-                  onChange={(e) => update(selected.id, { endDate: e.target.value || undefined })}
+                  value={selected.startDate}
+                  onChange={(e) => update(selected.id, { startDate: e.target.value })}
                 />
               </label>
+              {selected.repeats !== "once" && (
+                <label className="split-field">
+                  Ends (optional)
+                  <input
+                    type="date"
+                    min={selected.startDate}
+                    value={selected.endDate ?? ""}
+                    onChange={(e) => update(selected.id, { endDate: e.target.value || undefined })}
+                  />
+                </label>
+              )}
+            </div>
+
+            {selected.repeats !== "once" && selected.direction === "out" && (
+              <VendorCoverage
+                selected={selected.coveredByVendors ?? []}
+                vendors={vendors}
+                onChange={(next) => update(selected.id, { coveredByVendors: next })}
+              />
             )}
+
+            <p className="split-hint">{hintFor(selected)}</p>
+
+            <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
+              Remove line
+            </button>
           </div>
-
-          {selected.repeats !== "once" && selected.direction === "out" && (
-            <VendorCoverage
-              selected={selected.coveredByVendors ?? []}
-              vendors={vendors}
-              onChange={(next) => update(selected.id, { coveredByVendors: next })}
-            />
-          )}
-
-          <p className="split-hint">{hintFor(selected)}</p>
-
-          <button className="btn sm split-remove" onClick={() => remove(selected.id)}>
-            Remove line
-          </button>
         </div>
       )}
     </div>

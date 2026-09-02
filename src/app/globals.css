@@ -1263,7 +1263,11 @@ input.cell-date:disabled {
    until then — which is what a row of eight labelled inputs per item forces. */
 .split-card {
   padding: 0;
+  /* `clip` reads like `hidden` but doesn't make a scroll container, which is
+     what lets .split-editor-inner stick to the viewport. `hidden` first, as
+     the fallback for browsers without `clip`. */
   overflow: hidden;
+  overflow: clip;
   display: grid;
   grid-template-columns: 1fr;
 }
@@ -1413,10 +1417,22 @@ input.cell-date:disabled {
   background: var(--bg-elev-2);
   border-left: 1px solid var(--border);
   padding: 20px 20px 18px;
+  min-width: 0;
+}
+/* The fields follow you down a long list: the column stays full height (so the
+   panel and its border still run the length of the card), while the fields
+   inside it stick to the top of the viewport, scrolling within themselves if
+   they're taller than it. Without this, editing anyone below the fold meant
+   scrolling back up to find their fields. */
+.split-editor-inner {
+  position: sticky;
+  top: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  max-height: calc(100vh - 34px);
+  overflow-y: auto;
 }
 .split-field {
   display: flex;
@@ -1578,6 +1594,12 @@ input.cell-date:disabled {
   .split-editor {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+  /* Stacked under the list, there's nothing to follow — let it scroll away. */
+  .split-editor-inner {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
